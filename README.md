@@ -1,6 +1,7 @@
 # Geometry Dash Web — Decompilation & Native C++ Port
 
-> ⚠️ **Notice:** This project leveraged AI tools during both the JavaScript deobfuscation phase and parts of the native engine architectural translation.
+> # ⚠️ **Warning:** This project uses AI.
+> Some people may not like AI at all for any purpose. If so, just ignore this project. Do not hate on it. I personally believe using AI for both decompilation and porting the entire engine to C++ is a completely valid use case, as doing either of these entirely by hand would take forever.
 
 ---
 
