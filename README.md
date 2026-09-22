@@ -12,7 +12,7 @@ This repository by **Velipetroll** contains two major milestones:
 
 ---
 
-## ⚡ The Native C++ / OpenGL 1.1 Engine (`src_cpp/`)
+## ⚡ The Native C++ / OpenGL 1.1 Engine 
 
 Rather than relying on heavy modern engines (like Unity, Godot) or browser runtimes, the game logic was translated 1:1 into native C++ with a custom fixed-function pipeline renderer.
 
