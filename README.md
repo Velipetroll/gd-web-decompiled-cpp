@@ -6,7 +6,7 @@
 
 ## 🎮 What is this project?
 
-This repository by **Velipetroll** contains two major milestones:
+This repository contains two major milestones:
 1. **The clean, reverse-engineered deobfuscation** of the official Geometry Dash web demo found on [geometrydash.com](https://geometrydash.com) (originally built on Phaser 3.90.0).
 2. **A 100% standalone, lightweight native C++ port** built from scratch using **OpenGL 1.1** and **SDL2**, engineered specifically to run at hundreds of frames per second on ancient, low-end hardware (such as legacy netbooks, school laptops, and Intel Atom / GMA graphics).
 
