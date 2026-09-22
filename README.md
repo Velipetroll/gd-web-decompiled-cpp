@@ -124,7 +124,6 @@ The initial phase of this project accomplished:
 
 ## 🤝 Credits & Acknowledgements
 
-* **Velipetroll:** Creator and maintainer of this repository and the Native C++ port.
 * **RobTop Games:** Creator of Geometry Dash.
 * **Phaser Studio:** Developers of the Phaser HTML5 game engine.
 * **Original Decompilation Contributors:** For the initial extraction and reverse-engineering of the browser bundle.
