@@ -65,7 +65,7 @@ make -j$(nproc)
 │   ├── StereoMadness.mp3
 │   └── *.ogg                     # Sound effects (explode_11, playSound_01, etc.)
 │
-├── src_cpp/                      # Native C++ Engine (OpenGL 1.1 + SDL2)
+├── src/                          # Native C++ Engine (OpenGL 1.1 + SDL2)
 │   ├── main.cpp                  # Entry point, SDL window setup & letterbox viewport
 │   ├── constants.h               # Shared tuning constants & 240Hz step definitions
 │   ├── boot-scene.h / .cpp       # Asset preloader & OpenGL texture management
@@ -86,25 +86,6 @@ make -j$(nproc)
 │   ├── stb_vorbis.c              # Public domain OGG Vorbis decoder (for SFX)
 │   └── miniaudio.h               # Lightweight audio playback library
 │
-├── src/                          # Original Deobfuscated JavaScript source (Phaser 3.90.0)
-│   ├── constants.js
-│   ├── boot-scene.js
-│   ├── font-helpers.js
-│   ├── player-physics-state.js
-│   ├── level-data-helpers.js
-│   ├── pako-compression.js
-│   ├── level-renderer.js
-│   ├── trail-renderer.js
-│   ├── sprite-layer-helper.js
-│   ├── player.js
-│   ├── tween-value.js
-│   ├── color-manager.js
-│   ├── audio-manager.js
-│   ├── game-scene.js
-│   ├── win-effects.js
-│   └── main.js
-│
-├── index.html                    # Web entry point
 └── Makefile                      # Incremental native build system
 ```
 
