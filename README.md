@@ -50,24 +50,25 @@ sudo pacman -S base-devel sdl2 mesa zlib
 sudo apt install build-essential libsdl2-dev libgl1-mesa-dev zlib1g-dev
 ```
 
-#### Windows (MSYS2 / MinGW64)
-You can compile natively on Windows using [MSYS2](https://www.msys2.org/) (MinGW 64-bit environment):
+#### Windows (MSYS2 MINGW64)
+Open the **MSYS2 MINGW64** terminal and install the compiler, build tools, and development libraries:
 ```bash
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib
 ```
 
 ---
 
 ### Compile & Launch
-The project uses the **exact same commands across both Linux and Windows** via the Makefile with automatic header dependency tracking (`-MMD -MP`):
+The build system automatically detects your operating system, compiles with all CPU cores in parallel, bundles the `assets/` folder, embeds the Windows icon (`resource.rc`), and copies all required runtime DLLs directly into `build/`:
 
 ```bash
-# Compile using all CPU cores (Linux / Windows MSYS2)
-make -j$(nproc)
+# Compile using all CPU cores automatically (Linux / Windows MSYS2)
+make
+# (Or 'mingw32-make' on Windows MSYS2)
 
 # Run the game
-./GeometryDash       # On Linux
-./GeometryDash.exe   # On Windows
+./build/GeometryDash       # On Linux
+./build/GeometryDash.exe   # On Windows (or double-click it in Explorer)
 ```
 
 ---
