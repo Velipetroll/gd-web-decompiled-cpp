@@ -13,16 +13,16 @@
 
 This repository contains two major milestones:
 1. **The clean, reverse-engineered deobfuscation** of the official Geometry Dash web demo found on [geometrydash.com](https://geometrydash.com) (originally built on Phaser 3.90.0).
-2. **A 100% standalone, lightweight native C++ port** built from scratch using **OpenGL 1.1** and **SDL2**, engineered to replicate the exact look, feel, and mechanics of the original JavaScript web release with **~95% visual and physical accuracy**, while running at hundreds of frames per second on ancient, low-end hardware (such as legacy netbooks, school laptops, and Intel Atom / GMA graphics).
+2. **A 100% standalone, lightweight native C++ port** built from scratch using **OpenGL 1.1** and **SDL2**, engineered to replicate the exact look, feel, and mechanics of the original JavaScript web release **1:1**, while running at hundreds of frames per second on ancient, low-end hardware (such as legacy netbooks, school laptops, and Intel Atom / GMA graphics).
 
 ---
 
 ## ⚡ The Native C++ / OpenGL 1.1 Engine 
 
-Rather than relying on heavy modern engines (like Unity, Godot) or browser runtimes, the game logic was translated to match the original JavaScript implementation with high visual parity using a custom fixed-function pipeline renderer.
+Rather than relying on heavy modern engines (like Unity, Godot) or browser runtimes, the game logic was translated 1:1 from the original JavaScript implementation using a custom fixed-function pipeline renderer.
 
 ### Key Features
-* **~95% Visual & Mechanical Fidelity:** Faithfully reproduces the complete *Stereo Madness* experience from the original JS web build—including interactive bouncy menus, the slide-in intro, ship mode physics with streak ribbon, 1:1 particles (ground dust, landing bursts, shockwaves), dynamic color triggers, parallax background, animated end-level sequence, and zero-latency audio playback.
+* **1:1 Visual & Mechanical Fidelity:** Faithfully reproduces the complete *Stereo Madness* experience from the original JS web build—including interactive bouncy menus, the slide-in intro, ship mode physics with streak ribbon, 1:1 particles (ground dust, landing bursts, shockwaves), dynamic color triggers, parallax background, animated end-level sequence, and zero-latency audio playback.
 * **Legacy OpenGL 1.1 Pipeline:** Zero programmable shader requirements. Uses standard 2D orthographic projections, matrix stacks, and texture quads. Runs on practically any GPU manufactured in the last 20+ years.
 * **1:1 Physics Reproduction (240 Hz Sub-stepping):** Faithfully mirrors RobTop’s physics model by sub-stepping delta time into 240 Hz slices. The cube, ship gravity, jump arcs, and rotation feel identical to the original game.
 * **Native zlib Decompression:** Completely strips away the ~4,000 lines of JavaScript inflate/deflate code (Pako.js), replacing it with system-native `zlib` to decompress level strings instantly.
