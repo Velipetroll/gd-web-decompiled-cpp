@@ -1,5 +1,9 @@
 # Geometry Dash Web — Decompilation & Native C++ Port
 
+<p align="center">
+  <img src="https://cdn.discordapp.com/attachments/1169430704153706536/1552298926504419379/imagen.png?ex=6ab51a88&is=6ab3c908&hm=df6f69fbe00f66fd915991874e4d597edb1dd88eb2062330de8bef52cfe5935c" alt="Geometry Dash Web C++ Port" width="700">
+</p>
+
 > # ⚠️ **Warning:** This project uses AI.
 > Some people may not like AI at all for any purpose. If so, just ignore this project. Do not hate on it. I personally believe using AI for both decompilation and porting the entire engine to C++ is a completely valid use case, as doing either of these entirely by hand would take forever.
 
