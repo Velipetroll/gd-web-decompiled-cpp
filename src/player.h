@@ -10,10 +10,21 @@
 
 class LevelRenderer;
 
+struct ExplosionLayer {
+    float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f;
+    float r = 1.0f, g = 1.0f, b = 1.0f;
+    bool valid = false;
+};
+
+struct ShardQuad {
+    float vx0 = 0.0f, vy0 = 0.0f, vx1 = 0.0f, vy1 = 0.0f;
+    float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f;
+    float r = 1.0f, g = 1.0f, b = 1.0f;
+};
+
 struct ExplosionPiece {
     float x = 0.0f, y = 0.0f;
     float w = 0.0f, h = 0.0f;
-    float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f;
     float xVel = 0.0f, yVel = 0.0f;
     float angle = 0.0f, rotDelta = 0.0f;
     float timer = 1.4f;
@@ -21,6 +32,8 @@ struct ExplosionPiece {
     float halfSize = 10.0f;
     bool hasTrail = false;
     float trailTimer = 0.0f;
+
+    std::vector<ShardQuad> quads;
 };
 
 struct PieceTrailParticle {

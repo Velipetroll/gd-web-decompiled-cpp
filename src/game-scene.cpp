@@ -42,10 +42,10 @@ static std::string formatPlayTime(float seconds) {
 
 static float easeElasticOut(float t) {
     if (t <= 0.0f) return 0.01f;
-    if (t >= 1.0f) return 1.1f;
+    if (t >= 1.0f) return 1.0f;
     float p = 0.6f;
     float val = std::pow(2.0f, -10.0f * t) * std::sin((t - p / 4.0f) * (2.0f * 3.14159265f) / p) + 1.0f;
-    return 0.01f + (1.1f - 0.01f) * val;
+    return val;
 }
 
 static float easeBounceOut(float t) {
@@ -96,6 +96,27 @@ void GameScene::init() {
 
     _player->setCubeVisible(false);
     _player->setShipVisible(false);
+
+    _btnAnims[BTN_MENU_PLAY].init(1.0f);
+    _btnAnims[BTN_MENU_FS].init(0.64f);
+    _btnAnims[BTN_MENU_INFO].init(0.64f);
+    _btnAnims[BTN_MENU_STEAM].init(1.0f / 1.5f);
+    _btnAnims[BTN_MENU_GOOGLE].init(1.0f / 1.5f);
+    _btnAnims[BTN_MENU_APPLE].init(1.0f / 1.5f);
+
+    _btnAnims[BTN_PAUSE_FS].init(0.64f);
+    _btnAnims[BTN_PAUSE_REPLAY].init(1.0f);
+    _btnAnims[BTN_PAUSE_PLAY].init(1.0f);
+    _btnAnims[BTN_PAUSE_MENU].init(1.0f);
+
+    _btnAnims[BTN_END_REPLAY].init(1.0f);
+    _btnAnims[BTN_END_MENU].init(1.0f);
+    _btnAnims[BTN_END_APPLE].init(1.0f / 1.5f);
+    _btnAnims[BTN_END_GOOGLE].init(1.0f / 1.5f);
+    _btnAnims[BTN_END_STEAM].init(1.0f / 1.5f);
+
+    _btnAnims[BTN_INFO_CLOSE].init(0.80f);
+    _btnAnims[BTN_INFO_YT].init(0.50f);
 }
 
 void GameScene::_resetGameplayState() {
@@ -137,7 +158,28 @@ void GameScene::_resetGameplayState() {
     _isMenuAnimatingOut = false;
     _menuAnimTimer = 0.0f;
     _menuPlayTimer = 0.0f;
+    _menuGlitterTimer = 0.0f;
     _firstPlay = true;
+
+    _newBestActive = false;
+    _newBestTimer = 0.0f;
+    _newBestScale = 0.01f;
+
+    _endLayerHiding = false;
+    _endLayerHideTimer = 0.0f;
+    _endLayerHideCallback = nullptr;
+}
+
+void GameScene::_showNewBest() {
+    _newBestActive = true;
+    _newBestTimer = 0.0f;
+    _newBestScale = 0.01f;
+}
+
+void GameScene::_hideEndLayer(std::function<void()> onComplete) {
+    _endLayerHiding = true;
+    _endLayerHideTimer = 0.0f;
+    _endLayerHideCallback = onComplete;
 }
 
 void GameScene::startGame() {
@@ -274,6 +316,7 @@ void GameScene::handleEvent(const SDL_Event& event, int windowW, int windowH, SD
             releaseButton();
         }
     }
+
     else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONUP) {
         float targetAspect = (float)screenWidth / (float)screenHeight;
         float windowAspect = (float)windowW / (float)windowH;
@@ -294,35 +337,16 @@ void GameScene::handleEvent(const SDL_Event& event, int windowW, int windowH, SD
         float virtY = (float)(mouseY - vpY) * ((float)screenHeight / (float)vpH);
         float midX = screenWidth * 0.5f;
 
-        if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
-            _draggingMusicSlider = false;
-            _draggingSfxSlider = false;
-            releaseButton();
-            return;
-        }
+        auto checkButtonHit = [&](float vx, float vy) -> ButtonId {
+            auto getScaleFactor = [&](ButtonId id, float baseScale) -> float {
+                return (baseScale > 0.0f) ? (_btnAnims[id].scale / baseScale) : 1.0f;
+            };
 
-        if (_paused && event.type == SDL_MOUSEMOTION && !_showEndLayerUI) {
-            float trackWidth = 288.4f;
-            if (_draggingMusicSlider) {
-                float startX = (midX - 200.0f) - 144.2f;
-                float val = std::clamp((virtX - startX) / trackWidth, 0.0f, 1.0f);
-                _audio.setUserMusicVolume(val);
-            } else if (_draggingSfxSlider) {
-                float startX = (midX + 200.0f) - 144.2f;
-                float val = std::clamp((virtX - startX) / trackWidth, 0.0f, 1.0f);
-                _sfxVolume = val;
-                _audio.setSfxVolume(_sfxVolume);
-            }
-            return;
-        }
-
-        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
             if (_showInfoPopup) {
-                float dClose = (virtX - (midX - 220.0f)) * (virtX - (midX - 220.0f)) + (virtY - 172.0f) * (virtY - 172.0f);
-                if (dClose <= 25.0f * 25.0f) {
-                    _showInfoPopup = false;
-                    return;
-                }
+                float closeFactor = getScaleFactor(BTN_INFO_CLOSE, 0.80f);
+                float closeR = 40.0f * closeFactor;
+                float dClose = (vx - (midX - 220.0f)) * (vx - (midX - 220.0f)) + (vy - 172.0f) * (vy - 172.0f);
+                if (dClose <= closeR * closeR) return BTN_INFO_CLOSE;
 
                 float textW = 145.0f;
                 const BitmapFont* gf = getFont("goldFont");
@@ -330,91 +354,140 @@ void GameScene::handleEvent(const SDL_Event& event, int windowW, int windowH, SD
                     float tw = 0.0f;
                     for (char ch : std::string("by ForeverBound")) {
                         auto it = gf->chars.find((unsigned char)ch);
-                        if (it != gf->chars.end()) tw += it->second.xAdvance * 0.55f;
+                        if (it != gf->chars.end()) tw += it->second.xAdvance * 0.6f;
                     }
                     if (tw > 0.0f) textW = tw;
                 }
-                float textRight = (midX - 25.0f) + (textW * 0.5f);
-                float ytX = textRight + 10.0f + 16.0f;
+                float textRight = (midX - 20.0f) + (textW * 0.5f);
+                float ytX = textRight + 20.0f + 40.0f;
+                float ytFactor = getScaleFactor(BTN_INFO_YT, 0.50f);
+                if (std::abs(vx - ytX) <= 35.0f * ytFactor && std::abs(vy - 368.0f) <= 25.0f * ytFactor) return BTN_INFO_YT;
 
-                float dYT = (virtX - ytX) * (virtX - ytX) + (virtY - 366.0f) * (virtY - 366.0f);
-                if (dYT <= 25.0f * 25.0f) {
-                    openURL("https://www.youtube.com/watch?v=JhKyKEDxo8Q");
-                    return;
-                }
-
-                if (virtX < midX - 240.0f || virtX > midX + 240.0f || virtY < 152.0f || virtY > 488.0f) {
-                    _showInfoPopup = false;
-                }
-                return;
+                return BTN_COUNT;
             }
 
             if (_menuActive) {
-                if (virtX >= 10 && virtX <= 60 && virtY >= 10 && virtY <= 60) {
-                    toggleFullscreen(window);
-                    _isFullscreen = !_isFullscreen;
-                    return;
-                }
-                if (virtX >= screenWidth - 60 && virtX <= screenWidth - 10 && virtY >= 10 && virtY <= 60) {
-                    _showInfoPopup = true;
-                    return;
-                }
-                if (virtY >= 520 && virtY <= 590) {
-                    if (virtX >= screenWidth - 580 && virtX <= screenWidth - 440) {
-                        openURL("https://apps.apple.com/us/app/geometry-dash/id625334537");
-                        return;
-                    } else if (virtX >= screenWidth - 370 && virtX <= screenWidth - 230) {
-                        openURL("https://play.google.com/store/apps/details?id=com.robtopx.geometryjump&hl=en");
-                        return;
-                    } else if (virtX >= screenWidth - 160 && virtX <= screenWidth - 20) {
-                        openURL("https://store.steampowered.com/app/322170/Geometry_Dash");
-                        return;
-                    }
-                }
-                float dx = virtX - midX;
-                float dy = virtY - _menuPlayBtnY;
-                if (dx * dx + dy * dy <= 75.0f * 75.0f) {
-                    _audio.playEffect("playSound_01");
-                    startGame();
-                    return;
-                }
+                float fsFactor = getScaleFactor(BTN_MENU_FS, 0.64f);
+                if (std::abs(vx - 33.0f) <= 32.0f * fsFactor && std::abs(vy - 33.0f) <= 32.0f * fsFactor) return BTN_MENU_FS;
+
+                float infoFactor = getScaleFactor(BTN_MENU_INFO, 0.64f);
+                if (std::abs(vx - (screenWidth - 33.0f)) <= 32.0f * infoFactor && std::abs(vy - 33.0f) <= 32.0f * infoFactor) return BTN_MENU_INFO;
+
+                float sScale = 1.0f / 1.5f;
+                float steamFactor = getScaleFactor(BTN_MENU_STEAM, sScale);
+                if (std::abs(vx - (screenWidth - 130.0f)) <= 75.0f * steamFactor && std::abs(vy - 555.0f) <= 28.0f * steamFactor) return BTN_MENU_STEAM;
+
+                float googleFactor = getScaleFactor(BTN_MENU_GOOGLE, sScale);
+                if (std::abs(vx - (screenWidth - 340.0f)) <= 75.0f * googleFactor && std::abs(vy - 555.0f) <= 28.0f * googleFactor) return BTN_MENU_GOOGLE;
+
+                float appleFactor = getScaleFactor(BTN_MENU_APPLE, sScale);
+                if (std::abs(vx - (screenWidth - 550.0f)) <= 75.0f * appleFactor && std::abs(vy - 555.0f) <= 28.0f * appleFactor) return BTN_MENU_APPLE;
+
+                float playFactor = getScaleFactor(BTN_MENU_PLAY, 1.0f);
+                float dx = vx - midX;
+                float dy = vy - _menuPlayBtnY;
+                float playR = 70.0f * playFactor;
+                if (dx * dx + dy * dy <= playR * playR) return BTN_MENU_PLAY;
+
+                return BTN_COUNT;
             }
-            else if (_paused && !_showEndLayerUI) {
-                if (virtX >= 40 && virtX <= 90 && virtY >= 40 && virtY <= 90) {
-                    toggleFullscreen(window);
-                    _isFullscreen = !_isFullscreen;
-                    return;
+
+            if (_paused && !_showEndLayerUI) {
+                float fsFactor = getScaleFactor(BTN_PAUSE_FS, 0.64f);
+                if (std::abs(vx - 60.0f) <= 45.0f * fsFactor && std::abs(vy - 60.0f) <= 45.0f * fsFactor) return BTN_PAUSE_FS;
+
+                struct PauseBtnDef { const char* name; ButtonId id; };
+                PauseBtnDef pBtns[3] = {
+                    {"GJ_replayBtn_001.png", BTN_PAUSE_REPLAY},
+                    {"GJ_playBtn2_001.png",  BTN_PAUSE_PLAY},
+                    {"GJ_menuBtn_001.png",   BTN_PAUSE_MENU}
+                };
+
+                float pW[3];
+                float totalW = 0.0f;
+                for (int i = 0; i < 3; ++i) {
+                    const AtlasFrame* af = findAtlasFrame(pBtns[i].name);
+                    pW[i] = (af && af->w > 0.0f) ? af->w : 85.0f;
+                    totalW += pW[i];
                 }
-                float dReplay = (virtX - (midX - 160.0f)) * (virtX - (midX - 160.0f)) + (virtY - 330.0f) * (virtY - 330.0f);
-                if (dReplay <= 45.0f * 45.0f) {
-                    resumeGame();
-                    restartLevel();
-                    return;
-                }
-                float dPlay = (virtX - midX) * (virtX - midX) + (virtY - 330.0f) * (virtY - 330.0f);
-                if (dPlay <= 55.0f * 55.0f) {
-                    resumeGame();
-                    return;
-                }
-                float dMenu = (virtX - (midX + 160.0f)) * (virtX - (midX + 160.0f)) + (virtY - 330.0f) * (virtY - 330.0f);
-                if (dMenu <= 45.0f * 45.0f) {
-                    _audio.playEffect("quitSound_01");
-                    _audio.stopMusic();
-                    _fadeState = 1;
-                    _fadeTimer = 0.0f;
-                    return;
+                totalW += 40.0f * 2.0f;
+
+                float pStartX = midX - totalW * 0.5f;
+                for (int i = 0; i < 3; ++i) {
+                    float bx = pStartX + pW[i] * 0.5f;
+                    float btnFactor = getScaleFactor(pBtns[i].id, 1.0f);
+                    float halfHitW = (pW[i] * 0.5f + 10.0f) * btnFactor;
+                    float halfHitH = (pW[i] * 0.5f + 10.0f) * btnFactor;
+                    if (std::abs(vx - bx) <= halfHitW && std::abs(vy - 330.0f) <= halfHitH) {
+                        return pBtns[i].id;
+                    }
+                    pStartX += pW[i] + 40.0f;
                 }
 
+                return BTN_COUNT;
+            }
+
+            if (_showEndLayerUI && !_endLayerHiding) {
+                float replayFactor = getScaleFactor(BTN_END_REPLAY, 1.0f);
+                float dReplay = (vx - (midX - 200.0f)) * (vx - (midX - 200.0f)) + (vy - 555.0f) * (vy - 555.0f);
+                float replayR = 50.0f * replayFactor;
+                if (dReplay <= replayR * replayR) return BTN_END_REPLAY;
+
+                float menuFactor = getScaleFactor(BTN_END_MENU, 1.0f);
+                float dMenu = (vx - (midX + 200.0f)) * (vx - (midX + 200.0f)) + (vy - 555.0f) * (vy - 555.0f);
+                float menuR = 50.0f * menuFactor;
+                if (dMenu <= menuR * menuR) return BTN_END_MENU;
+
+                float sScale = 1.0f / 1.5f;
+                float appleFactor = getScaleFactor(BTN_END_APPLE, sScale);
+                if (std::abs(vx - (midX - 225.0f)) <= 75.0f * appleFactor && std::abs(vy - 437.5f) <= 28.0f * appleFactor) return BTN_END_APPLE;
+
+                float googleFactor = getScaleFactor(BTN_END_GOOGLE, sScale);
+                if (std::abs(vx - midX) <= 75.0f * googleFactor && std::abs(vy - 437.5f) <= 28.0f * googleFactor) return BTN_END_GOOGLE;
+
+                float steamFactor = getScaleFactor(BTN_END_STEAM, sScale);
+                if (std::abs(vx - (midX + 225.0f)) <= 75.0f * steamFactor && std::abs(vy - 437.5f) <= 28.0f * steamFactor) return BTN_END_STEAM;
+
+                return BTN_COUNT;
+            }
+
+            return BTN_COUNT;
+        };
+
+        auto getBaseScale = [](ButtonId id) -> float {
+            switch (id) {
+                case BTN_MENU_FS:
+                case BTN_MENU_INFO:
+                case BTN_PAUSE_FS:
+                    return 0.64f;
+                case BTN_MENU_STEAM:
+                case BTN_MENU_GOOGLE:
+                case BTN_MENU_APPLE:
+                case BTN_END_APPLE:
+                case BTN_END_GOOGLE:
+                case BTN_END_STEAM:
+                    return 1.0f / 1.5f;
+                case BTN_INFO_CLOSE:
+                    return 0.80f;
+                case BTN_INFO_YT:
+                    return 0.50f;
+                default:
+                    return 1.0f;
+            }
+        };
+
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+            if (_paused && !_showEndLayerUI) {
                 float trackWidth = 288.4f;
                 float musicStartX = (midX - 200.0f) - 144.2f;
-                if (virtX >= musicStartX - 15 && virtX <= musicStartX + trackWidth + 15 && virtY >= 475 && virtY <= 525) {
+                if (virtX >= musicStartX - 20 && virtX <= musicStartX + trackWidth + 20 && virtY >= 470 && virtY <= 530) {
                     _draggingMusicSlider = true;
                     float val = std::clamp((virtX - musicStartX) / trackWidth, 0.0f, 1.0f);
                     _audio.setUserMusicVolume(val);
                     return;
                 }
                 float sfxStartX = (midX + 200.0f) - 144.2f;
-                if (virtX >= sfxStartX - 15 && virtX <= sfxStartX + trackWidth + 15 && virtY >= 475 && virtY <= 525) {
+                if (virtX >= sfxStartX - 20 && virtX <= sfxStartX + trackWidth + 20 && virtY >= 470 && virtY <= 530) {
                     _draggingSfxSlider = true;
                     float val = std::clamp((virtX - sfxStartX) / trackWidth, 0.0f, 1.0f);
                     _sfxVolume = val;
@@ -422,41 +495,136 @@ void GameScene::handleEvent(const SDL_Event& event, int windowW, int windowH, SD
                     return;
                 }
             }
-            else if (_showEndLayerUI) {
-                float dReplay = (virtX - (midX - 160.0f)) * (virtX - (midX - 160.0f)) + (virtY - 545.0f) * (virtY - 545.0f);
-                if (dReplay <= 45.0f * 45.0f) {
-                    _showEndLayerUI = false;
-                    _paused = false;
-                    restartLevel();
-                    return;
-                }
-                float dMenu = (virtX - (midX + 160.0f)) * (virtX - (midX + 160.0f)) + (virtY - 545.0f) * (virtY - 545.0f);
-                if (dMenu <= 45.0f * 45.0f) {
-                    _audio.playEffect("quitSound_01");
-                    _audio.stopMusic();
-                    _fadeState = 1;
-                    _fadeTimer = 0.0f;
-                    return;
-                }
 
-                if (virtY >= 425.0f && virtY <= 470.0f) {
-                    if (virtX >= midX - 290.0f && virtX <= midX - 160.0f) {
-                        openURL("https://apps.apple.com/us/app/geometry-dash/id625334537");
-                    } else if (virtX >= midX - 65.0f && virtX <= midX + 65.0f) {
-                        openURL("https://play.google.com/store/apps/details?id=com.robtopx.geometryjump&hl=en");
-                    } else if (virtX >= midX + 160.0f && virtX <= midX + 290.0f) {
-                        openURL("https://store.steampowered.com/app/322170/Geometry_Dash");
-                    }
-                    return;
-                }
+            ButtonId hit = checkButtonHit(virtX, virtY);
+            if (hit != BTN_COUNT) {
+                _heldBtn = hit;
+                _isButtonPressed = true;
+                _btnAnims[hit].press(getBaseScale(hit));
+                return;
             }
-            else {
-                if (virtX >= screenWidth - 65 && virtY <= 65) {
+
+            if (_showInfoPopup) {
+                if (virtX < midX - 240.0f || virtX > midX + 240.0f || virtY < 152.0f || virtY > 488.0f) {
+                    _showInfoPopup = false;
+                }
+                return;
+            }
+
+            if (!_menuActive && !_paused && !_showEndLayerUI) {
+                if (virtX >= screenWidth - 75.0f && virtY <= 75.0f) {
                     pauseGame();
                 } else {
                     pushButton();
                 }
             }
+        }
+
+        else if (event.type == SDL_MOUSEMOTION) {
+            if (_paused && !_showEndLayerUI) {
+                float trackWidth = 288.4f;
+                if (_draggingMusicSlider) {
+                    float startX = (midX - 200.0f) - 144.2f;
+                    float val = std::clamp((virtX - startX) / trackWidth, 0.0f, 1.0f);
+                    _audio.setUserMusicVolume(val);
+                    return;
+                } else if (_draggingSfxSlider) {
+                    float startX = (midX + 200.0f) - 144.2f;
+                    float val = std::clamp((virtX - startX) / trackWidth, 0.0f, 1.0f);
+                    _sfxVolume = val;
+                    _audio.setSfxVolume(_sfxVolume);
+                    return;
+                }
+            }
+
+            if (_heldBtn != BTN_COUNT) {
+                ButtonId cur = checkButtonHit(virtX, virtY);
+                if (cur != _heldBtn && _isButtonPressed) {
+                    _isButtonPressed = false;
+                    _btnAnims[_heldBtn].deselect();
+                } else if (cur == _heldBtn && !_isButtonPressed) {
+                    _isButtonPressed = true;
+                    _btnAnims[_heldBtn].press(getBaseScale(_heldBtn));
+                }
+            }
+        }
+
+        else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+            _draggingMusicSlider = false;
+            _draggingSfxSlider = false;
+
+            if (_heldBtn != BTN_COUNT) {
+                ButtonId releaseHit = checkButtonHit(virtX, virtY);
+                ButtonId active = _heldBtn;
+                bool wasPressed = _isButtonPressed;
+
+                _heldBtn = BTN_COUNT;
+                _isButtonPressed = false;
+                _btnAnims[active].release();
+
+                if (wasPressed && releaseHit == active) {
+                    switch (active) {
+                        case BTN_INFO_CLOSE:
+                            _showInfoPopup = false;
+                            break;
+                        case BTN_INFO_YT:
+                            openURL("https://www.youtube.com/watch?v=JhKyKEDxo8Q");
+                            break;
+                        case BTN_MENU_FS:
+                        case BTN_PAUSE_FS:
+                            toggleFullscreen(window);
+                            _isFullscreen = !_isFullscreen;
+                            break;
+                        case BTN_MENU_INFO:
+                            _showInfoPopup = true;
+                            break;
+                        case BTN_MENU_STEAM:
+                        case BTN_END_STEAM:
+                            openURL("https://store.steampowered.com/app/322170/Geometry_Dash");
+                            break;
+                        case BTN_MENU_GOOGLE:
+                        case BTN_END_GOOGLE:
+                            openURL("https://play.google.com/store/apps/details?id=com.robtopx.geometryjump&hl=en");
+                            break;
+                        case BTN_MENU_APPLE:
+                        case BTN_END_APPLE:
+                            openURL("https://apps.apple.com/us/app/geometry-dash/id625334537");
+                            break;
+                        case BTN_MENU_PLAY:
+                            _audio.playEffect("playSound_01");
+                            startGame();
+                            break;
+                        case BTN_PAUSE_PLAY:
+                            resumeGame();
+                            break;
+                        case BTN_PAUSE_REPLAY:
+                            resumeGame();
+                            restartLevel();
+                            break;
+                        case BTN_PAUSE_MENU:
+                            _audio.playEffect("quitSound_01");
+                            _audio.stopMusic();
+                            _fadeState = 1;
+                            _fadeTimer = 0.0f;
+                            break;
+                        case BTN_END_REPLAY:
+                            _hideEndLayer([this]() {
+                                restartLevel();
+                            });
+                            break;
+                        case BTN_END_MENU:
+                            _audio.playEffect("quitSound_01");
+                            _audio.stopMusic();
+                            _fadeState = 1;
+                            _fadeTimer = 0.0f;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+
+            releaseButton();
         }
     }
 }
@@ -471,7 +639,7 @@ float GameScene::_quantizeDelta(float dt) {
 }
 
 void GameScene::_updateBackground(float dt) {
-    // Unused: background scrolling is computed directly in update()
+    (void)dt;
 }
 
 void GameScene::_updateCameraY(float dt) {
@@ -624,6 +792,40 @@ static std::vector<FlightGlitter> _flightGlitters;
 static float _flightGlitterTimer = 0.0f;
 
 void GameScene::update(float dt) {
+    for (int i = 0; i < BTN_COUNT; ++i) {
+        _btnAnims[i].update(dt);
+    }
+
+    if (_newBestActive) {
+        _newBestTimer += dt;
+        if (_newBestTimer <= 0.40f) {
+            float t = _newBestTimer / 0.40f;
+            _newBestScale = easeElasticOut(t);
+        } else if (_newBestTimer <= 1.10f) {
+            _newBestScale = 1.0f;
+        } else if (_newBestTimer <= 1.30f) {
+            float t = (_newBestTimer - 1.10f) / 0.20f;
+            _newBestScale = std::max(0.01f, 1.0f - t * t);
+        } else {
+            _newBestActive = false;
+            _newBestScale = 0.01f;
+        }
+    }
+
+    if (_endLayerHiding) {
+        _endLayerHideTimer += dt;
+        float t = std::min(_endLayerHideTimer / 0.5f, 1.0f);
+        if (t >= 1.0f) {
+            _endLayerHiding = false;
+            _showEndLayerUI = false;
+            if (_endLayerHideCallback) {
+                auto cb = _endLayerHideCallback;
+                _endLayerHideCallback = nullptr;
+                cb();
+            }
+        }
+    }
+
     bool isFlightActive = _state.isFlying && !_state.isDead && !_levelWon && !_menuActive && !_paused;
     if (isFlightActive) {
         _flightGlitterTimer += dt;
@@ -722,7 +924,7 @@ void GameScene::update(float dt) {
 
     if (_menuActive) {
         _menuPlayTimer += dt;
-        _menuPlayBtnY = 320.0f + std::sin(_menuPlayTimer * 3.0f) * 6.0f;
+        _menuPlayBtnY = 322.0f + std::sin(_menuPlayTimer * (3.14159265f / 0.75f)) * 2.0f;
 
         float dx = dt * 60.0f * gravityConst * physicsConst09 * 0.25f;
         _menuCameraX += dx;
@@ -733,9 +935,11 @@ void GameScene::update(float dt) {
         _prevCameraX = _cameraX;
 
         _level->stepGroundAnimation(dt);
-        _level->updateGroundTiles(_slideGroundX, _cameraY);
+        _level->updateGroundTiles(_slideGroundX, _cameraY, dt);
 
-        if (rand() % 100 < 40) {
+        _menuGlitterTimer += dt;
+        while (_menuGlitterTimer >= 0.035f) {
+            _menuGlitterTimer -= 0.035f;
             MenuGlitter mg;
             mg.x = (screenWidth * 0.5f) + ((rand() % 260) - 130);
             mg.y = 320.0f + ((rand() % 200) - 100);
@@ -745,7 +949,12 @@ void GameScene::update(float dt) {
             _menuParticles.push_back(mg);
         }
         for (auto& mp : _menuParticles) mp.life += dt;
-        _menuParticles.erase(std::remove_if(_menuParticles.begin(), _menuParticles.end(), [](const MenuGlitter& mp){ return mp.life >= mp.maxLife; }), _menuParticles.end());
+        _menuParticles.erase(
+            std::remove_if(_menuParticles.begin(), _menuParticles.end(), [](const MenuGlitter& mp){
+                return mp.life >= mp.maxLife;
+            }),
+            _menuParticles.end()
+        );
 
         return;
     }
@@ -763,7 +972,7 @@ void GameScene::update(float dt) {
         _player->update(dt, _playerWorldX, _cameraY, _cameraX);
 
         _level->stepGroundAnimation(dt);
-        _level->updateGroundTiles(_slideGroundX, _cameraY);
+        _level->updateGroundTiles(_slideGroundX, _cameraY, dt);
         _level->applyEnterEffects(_cameraX);
 
         if (_playerWorldX >= 0.0f) {
@@ -783,12 +992,16 @@ void GameScene::update(float dt) {
             _audio.stopMusic();
             _audio.playEffect("explode_11", 0.65f);
             _deathSoundPlayed = true;
+        }
 
+        if (!_newBestShown) {
+            _newBestShown = true;
             float endX = _level->endXPos > 0.0f ? _level->endXPos : 6000.0f;
             _lastPercent = std::clamp((int)std::floor((_playerWorldX / endX) * 100.0f), 0, 99);
             if (_lastPercent > _bestPercent) {
                 _bestPercent = _lastPercent;
                 _hadNewBest = true;
+                _showNewBest();
             }
         }
 
@@ -823,7 +1036,7 @@ void GameScene::update(float dt) {
 
         _player->update(dt, _playerWorldX, _cameraY, _cameraX);
         _level->stepGroundAnimation(dt);
-        _level->updateGroundTiles(_slideGroundX, _cameraY);
+        _level->updateGroundTiles(_slideGroundX, _cameraY, dt);
         _level->applyEnterEffects(_cameraX);
 
         _audio.update(dt);
@@ -871,7 +1084,7 @@ void GameScene::update(float dt) {
             _showEndLayerUI = true;
         }
 
-        if (_showEndLayerUI) {
+        if (_showEndLayerUI && !_endLayerHiding) {
             float p = std::clamp((_endSequenceTimer - 3.45f) / 1.0f, 0.0f, 1.0f);
             if (p >= 1.0f && !_starAwardStarted) {
                 _starAwardStarted = true;
@@ -890,7 +1103,7 @@ void GameScene::update(float dt) {
                     _audio.playEffect("highscoreGet02");
 
                     float starX = (screenWidth * 0.5f) + 225.0f;
-                    float starY = 278.5f;
+                    float starY = 268.5f;
                     WinEffects::drawExpandingRing(starX, starY, 20.0f, 220.0f, 400.0f, true, false, 16776960);
                     WinEffects::spawnStarParticles(starX, starY, 30);
                 }
@@ -981,7 +1194,8 @@ void GameScene::update(float dt) {
     _level->applyEnterEffects(_cameraX);
 
     _level->stepGroundAnimation(dt);
-    _level->updateGroundTiles(_slideGroundX, _cameraY);
+    _level->updateGroundTiles(_slideGroundX, _cameraY, dt);
+    _level->updatePortals(dt, _cameraX);
     _player->update(dt, _playerWorldX, _cameraY, _cameraX);
 
     _level->updateEndPortalY(_cameraY, _state.isFlying);
@@ -1009,9 +1223,29 @@ void GameScene::_levelComplete() {
     static const std::vector<std::string> quotes = {
         "Awesome!", "Good\nJob!", "Well\nDone!", "Impressive!",
         "Amazing!", "Incredible!", "Skillful!", "Brilliant!",
-        "Warp\nSpeed!", "You are...\nThe One!"
+        "Warp\nSpeed!", "You are...\nThe One!", "Challenge\nBreaker!",
+        "Reflex\nMaster!", "Not\nbad!", "How is this\npossible!?"
     };
     _completeMessage = quotes[rand() % quotes.size()];
+}
+
+void GameScene::_renderNewBest() {
+    if (!_newBestActive || _newBestScale <= 0.01f) return;
+
+    float midX = screenWidth * 0.5f;
+    float centerY = 300.0f;
+
+    const AtlasFrame* nbAf = findAtlasFrame("GJ_newBest_001.png");
+    float origW = nbAf ? nbAf->w : 170.0f;
+    float origH = nbAf ? nbAf->h : 40.0f;
+    float nbW = origW * _newBestScale;
+    float nbH = origH * _newBestScale;
+
+    drawAtlasFrame("GJ_newBest_001.png", midX, centerY - nbH * 0.5f, nbW, nbH);
+
+    std::string pctStr = std::to_string(_lastPercent) + "%";
+    drawBitmapText("bigFont", pctStr, midX, centerY + 2.0f * _newBestScale + 25.0f * _newBestScale,
+                   1.1f * _newBestScale, 1.0f, 1.0f, 1.0f, 1.0f, true);
 }
 
 void GameScene::render() {
@@ -1103,6 +1337,8 @@ void GameScene::render() {
 
     glPopMatrix();
 
+    _renderNewBest();
+
     if (_completeBannerVisible && _completeBannerScale > 0.02f) {
         const AtlasFrame* lcAf = findAtlasFrame("GJ_levelComplete_001.png");
         float lw = (lcAf ? lcAf->w : 400.0f) * _completeBannerScale;
@@ -1145,10 +1381,11 @@ void GameScene::render() {
 void GameScene::_renderHUD() {
     if (_attempts > 0 && _playerWorldX < 1200.0f) {
         float alpha = std::clamp(1.0f - (_playerWorldX / 1000.0f), 0.0f, 1.0f);
+        float posX = screenWidth * 0.5f + (_attempts > 1 ? 100.0f : 0.0f);
         drawBitmapText("bigFont", "Attempt " + std::to_string(_attempts),
-                       screenWidth * 0.5f, 150.0f, 0.85f, 1.0f, 1.0f, 1.0f, alpha, true);
+                       posX, 150.0f, 0.85f, 1.0f, 1.0f, 1.0f, alpha, true);
     }
-    drawAtlasFrame("GJ_pauseBtn_clean_001.png", screenWidth - 35.0f, 35.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.5f);
+    drawAtlasFrame("GJ_pauseBtn_clean_001.png", screenWidth - 30.0f, 30.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 75.0f / 255.0f);
 }
 
 void GameScene::_renderMenu() {
@@ -1156,7 +1393,7 @@ void GameScene::_renderMenu() {
     float tPlay = std::min(_menuAnimTimer / 0.2f, 1.0f);
 
     float ease = t * t;
-    float playScale = 1.0f - (tPlay * tPlay);
+    float playExitScale = 1.0f - (tPlay * tPlay);
 
     float midX = screenWidth * 0.5f;
 
@@ -1171,10 +1408,11 @@ void GameScene::_renderMenu() {
     drawAtlasFrame("GJ_logo_001.png", midX, 100.0f - ease * 200.0f, 0.0f, 0.0f);
     drawAtlasFrame("tryMe_001.png", midX + 175.0f, 182.5f - ease * 250.0f, 0.0f, 0.0f);
 
-    if (playScale > 0.01f) {
+    if (playExitScale > 0.01f) {
         const AtlasFrame* playFrame = findAtlasFrame("GJ_playBtn_001.png");
-        float pw = (playFrame ? playFrame->w : 126.0f) * playScale;
-        float ph = (playFrame ? playFrame->h : 126.0f) * playScale;
+        float baseScale = _btnAnims[BTN_MENU_PLAY].scale;
+        float pw = (playFrame ? playFrame->w : 126.0f) * playExitScale * baseScale;
+        float ph = (playFrame ? playFrame->h : 126.0f) * playExitScale * baseScale;
         drawAtlasFrame("GJ_playBtn_001.png", midX, _menuPlayBtnY, pw, ph);
     }
 
@@ -1183,39 +1421,40 @@ void GameScene::_renderMenu() {
     float rh = (robFrame ? robFrame->h : 50.0f) * 0.9f;
     drawAtlasFrame("RobTopLogoBig_001.png", 160.0f, 555.0f + ease * 150.0f, rw, rh);
 
-    float btnScale = 1.0f / 1.5f;
-    auto drawStoreBtn = [&](const std::string& name, float px) {
+    auto drawStoreBtn = [&](const std::string& name, ButtonId id, float px) {
         const AtlasFrame* af = findAtlasFrame(name);
-        float bw = (af ? af->w : 140.0f) * btnScale;
-        float bh = (af ? af->h : 45.0f) * btnScale;
+        float curScale = _btnAnims[id].scale;
+        float bw = (af ? af->w : 140.0f) * curScale;
+        float bh = (af ? af->h : 45.0f) * curScale;
         drawAtlasFrame(name, px, 555.0f + ease * 150.0f, bw, bh);
     };
 
-    drawStoreBtn("downloadSteam_001.png",  screenWidth - 130.0f);
-    drawStoreBtn("downloadGoogle_001.png", screenWidth - 340.0f);
-    drawStoreBtn("downloadApple_001.png",  screenWidth - 550.0f);
+    drawStoreBtn("downloadSteam_001.png",  BTN_MENU_STEAM,  screenWidth - 130.0f);
+    drawStoreBtn("downloadGoogle_001.png", BTN_MENU_GOOGLE, screenWidth - 340.0f);
+    drawStoreBtn("downloadApple_001.png",  BTN_MENU_APPLE,  screenWidth - 550.0f);
 
-    auto drawCornerIcon = [&](const std::string& name, float px, float py, float r, float g, float b, float a) {
+    auto drawCornerIcon = [&](const std::string& name, ButtonId id, float px, float py, float r, float g, float b, float a) {
         const AtlasFrame* af = findAtlasFrame(name);
-        float iw = (af ? af->w : 40.0f) * 0.64f;
-        float ih = (af ? af->h : 40.0f) * 0.64f;
+        float curScale = _btnAnims[id].scale;
+        float iw = (af ? af->w : 40.0f) * curScale;
+        float ih = (af ? af->h : 40.0f) * curScale;
         drawAtlasFrame(name, px, py - ease * 100.0f, iw, ih, 0.0f, r, g, b, a);
     };
 
     std::string fsTexture = _isFullscreen ? "toggleFullscreenOff_001.png" : "toggleFullscreenOn_001.png";
     float cornerAlpha = 0.8f * (1.0f - ease);
 
-    drawCornerIcon(fsTexture, 33.0f, 33.0f, 0.0f, 102.0f / 255.0f, 1.0f, cornerAlpha);
-    drawCornerIcon("GJ_infoIcon_001.png", screenWidth - 33.0f, 33.0f, 0.0f, 102.0f / 255.0f, 1.0f, cornerAlpha);
+    drawCornerIcon(fsTexture, BTN_MENU_FS, 33.0f, 33.0f, 0.0f, 102.0f / 255.0f, 1.0f, cornerAlpha);
+    drawCornerIcon("GJ_infoIcon_001.png", BTN_MENU_INFO, screenWidth - 33.0f, 33.0f, 0.0f, 102.0f / 255.0f, 1.0f, cornerAlpha);
 
-    drawGenericText("© 2026 RobTop Games · geometrydash.com", screenWidth - 20.0f, 625.0f, 13.0f, 1.0f, 1.0f, 1.0f, 0.35f, 2);
+    drawGenericText("© 2026 RobTop Games · geometrydash.com", screenWidth - 20.0f, 625.0f + ease * 150.0f, 14.0f, 1.0f, 1.0f, 1.0f, 0.30f, 2);
 }
 
 void GameScene::_renderPauseOverlay() {
     float midX = screenWidth * 0.5f;
 
     glDisable(GL_TEXTURE_2D);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.65f);
+    glColor4f(0.0f, 0.0f, 0.0f, 75.0f / 255.0f);
     glBegin(GL_QUADS);
     glVertex2f(0.0f, 0.0f);
     glVertex2f(screenWidth, 0.0f);
@@ -1224,22 +1463,23 @@ void GameScene::_renderPauseOverlay() {
     glEnd();
     glEnable(GL_TEXTURE_2D);
 
-    drawScale9("square04_001", midX, 320.0f, screenWidth - 40.0f, 580.0f, 35.0f, 0.0f, 0.0f, 0.0f, 0.6f);
+    drawScale9("square04_001", midX, 320.0f, screenWidth - 40.0f, 600.0f, 35.0f, 0.0f, 0.0f, 0.0f, 150.0f / 255.0f);
 
     std::string fsTexture = _isFullscreen ? "toggleFullscreenOff_001.png" : "toggleFullscreenOn_001.png";
     const AtlasFrame* fsFrame = findAtlasFrame(fsTexture);
-    float fsw = (fsFrame ? fsFrame->w : 40.0f) * 0.64f;
-    float fsh = (fsFrame ? fsFrame->h : 40.0f) * 0.64f;
+    float fsScale = _btnAnims[BTN_PAUSE_FS].scale;
+    float fsw = (fsFrame ? fsFrame->w : 40.0f) * fsScale;
+    float fsh = (fsFrame ? fsFrame->h : 40.0f) * fsScale;
     drawAtlasFrame(fsTexture, 60.0f, 60.0f, fsw, fsh);
 
-    drawBitmapText("bigFont", "Stereo Madness", midX, 65.0f, 0.85f, 1.0f, 1.0f, 1.0f, 1.0f, true);
-    drawBitmapText("bigFont", "Normal Mode", midX, 130.0f, 0.65f, 0.0f, 1.0f, 1.0f, 1.0f, true);
+    drawBitmapText("bigFont", "Stereo Madness", midX, 65.0f, 0.70f, 1.0f, 1.0f, 1.0f, 1.0f, true);
+    drawBitmapText("bigFont", "Normal Mode", midX, 130.0f, 0.55f, 1.0f, 1.0f, 1.0f, 1.0f, true);
 
     const AtlasFrame* barFrame = findAtlasFrame("GJ_progressBar_001.png");
     float origW = (barFrame && barFrame->w > 0.0f) ? barFrame->w : 680.0f;
     float origH = (barFrame && barFrame->h > 0.0f) ? barFrame->h : 40.0f;
 
-    drawAtlasFrame("GJ_progressBar_001.png", midX, 170.0f, origW, origH, 0.0f, 0.0f, 0.0f, 0.0f, 0.6f);
+    drawAtlasFrame("GJ_progressBar_001.png", midX, 170.0f, origW, origH, 0.0f, 0.0f, 0.0f, 0.0f, 125.0f / 255.0f);
 
     int percent = std::clamp(_bestPercent, 0, 100);
     if (percent > 0 && barFrame && BootScene::textures.find("GJ_WebSheet") != BootScene::textures.end()) {
@@ -1275,16 +1515,45 @@ void GameScene::_renderPauseOverlay() {
         glEnd();
     }
 
-    drawBitmapText("bigFont", std::to_string(percent) + "%", midX, 170.0f, 0.55f, 1.0f, 1.0f, 1.0f, 1.0f, true);
+    drawBitmapText("bigFont", std::to_string(percent) + "%", midX, 170.0f, 0.50f, 1.0f, 1.0f, 1.0f, 1.0f, true);
 
-    drawAtlasFrame("GJ_replayBtn_001.png", midX - 160.0f, 330.0f, 0.0f, 0.0f);
-    drawAtlasFrame("GJ_playBtn2_001.png",  midX,          330.0f, 0.0f, 0.0f);
-    drawAtlasFrame("GJ_menuBtn_001.png",    midX + 160.0f, 330.0f, 0.0f, 0.0f);
+    struct PauseBtnDef {
+        std::string frame;
+        ButtonId id;
+    };
+    PauseBtnDef pauseBtns[3] = {
+        {"GJ_replayBtn_001.png", BTN_PAUSE_REPLAY},
+        {"GJ_playBtn2_001.png",  BTN_PAUSE_PLAY},
+        {"GJ_menuBtn_001.png",   BTN_PAUSE_MENU}
+    };
+
+    float btnWidths[3];
+    float totalBtnW = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        const AtlasFrame* af = findAtlasFrame(pauseBtns[i].frame);
+        btnWidths[i] = (af && af->w > 0.0f) ? af->w : 85.0f;
+        totalBtnW += btnWidths[i];
+    }
+    totalBtnW += 40.0f * (3 - 1);
+
+    float btnStartX = midX - totalBtnW * 0.5f;
+    for (int i = 0; i < 3; ++i) {
+        float posX = btnStartX + btnWidths[i] * 0.5f;
+        float posY = 330.0f;
+        const AtlasFrame* af = findAtlasFrame(pauseBtns[i].frame);
+        float sc = _btnAnims[pauseBtns[i].id].scale;
+        float bw = (af ? af->w : 85.0f) * sc;
+        float bh = (af ? af->h : 85.0f) * sc;
+        drawAtlasFrame(pauseBtns[i].frame, posX, posY, bw, bh);
+        btnStartX += btnWidths[i] + 40.0f;
+    }
 
     float grooveScale = 0.7f;
-    float grooveW = 294.0f;
-    float grooveH = 17.0f;
-    float trackW = 288.4f;
+    const AtlasFrame* grooveAf = findAtlasFrame("slidergroove.png");
+    float origGrooveW = (grooveAf && grooveAf->w > 0.0f) ? grooveAf->w : 420.0f;
+    float grooveW = origGrooveW * grooveScale;
+    float grooveH = (grooveAf ? grooveAf->h : 24.0f) * grooveScale;
+    float trackW = (origGrooveW - 8.0f) * grooveScale;
     float barHeight = 11.2f;
 
     auto drawSliderTileBar = [&](float startX, float fillWidth) {
@@ -1317,7 +1586,7 @@ void GameScene::_renderPauseOverlay() {
     };
 
     float musicCenterX = midX - 200.0f;
-    float musicStartX  = musicCenterX - 144.2f;
+    float musicStartX = musicCenterX - (origGrooveW * grooveScale) * 0.5f + 2.8f;
     float mVol = std::clamp(_audio.getUserMusicVolume(), 0.0f, 1.0f);
     float mFillW = (mVol < 0.03f) ? 0.0f : (mVol * trackW);
 
@@ -1327,6 +1596,7 @@ void GameScene::_renderPauseOverlay() {
     drawAtlasFrame("gj_songIcon_001.png", musicCenterX - 185.0f, 500.0f, miw, mih);
     drawSliderTileBar(musicStartX, mFillW);
     drawAtlasFrame("slidergroove.png", musicCenterX, 500.0f, grooveW, grooveH);
+
     std::string mThumbName = _draggingMusicSlider ? "sliderthumbsel.png" : "sliderthumb.png";
     const AtlasFrame* mThAf = findAtlasFrame(mThumbName);
     float mthw = (mThAf ? mThAf->w : 38.0f) * grooveScale;
@@ -1334,7 +1604,7 @@ void GameScene::_renderPauseOverlay() {
     drawAtlasFrame(mThumbName, musicStartX + (mVol * trackW), 500.0f, mthw, mthh);
 
     float sfxCenterX = midX + 200.0f;
-    float sfxStartX  = sfxCenterX - 144.2f;
+    float sfxStartX = sfxCenterX - (origGrooveW * grooveScale) * 0.5f + 2.8f;
     float sVol = std::clamp(_sfxVolume, 0.0f, 1.0f);
     float sFillW = (sVol < 0.03f) ? 0.0f : (sVol * trackW);
 
@@ -1344,6 +1614,7 @@ void GameScene::_renderPauseOverlay() {
     drawAtlasFrame("GJ_sfxIcon_001.png", sfxCenterX - 185.0f, 500.0f, siw, sih);
     drawSliderTileBar(sfxStartX, sFillW);
     drawAtlasFrame("slidergroove.png", sfxCenterX, 500.0f, grooveW, grooveH);
+
     std::string sThumbName = _draggingSfxSlider ? "sliderthumbsel.png" : "sliderthumb.png";
     const AtlasFrame* sThAf = findAtlasFrame(sThumbName);
     float sthw = (sThAf ? sThAf->w : 38.0f) * grooveScale;
@@ -1355,7 +1626,7 @@ void GameScene::_renderInfoPopup() {
     float midX = screenWidth * 0.5f;
 
     glDisable(GL_TEXTURE_2D);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.6f);
+    glColor4f(0.0f, 0.0f, 0.0f, 100.0f / 255.0f);
     glBegin(GL_QUADS);
     glVertex2f(0.0f, 0.0f);
     glVertex2f(screenWidth, 0.0f);
@@ -1367,14 +1638,15 @@ void GameScene::_renderInfoPopup() {
     drawScale9("GJ_square02", midX, 320.0f, 480.0f, 336.0f, 35.0f, 1.0f, 1.0f, 1.0f, 1.0f);
 
     const AtlasFrame* closeAf = findAtlasFrame("GJ_closeBtn_001.png");
-    float cw = (closeAf ? closeAf->w : 40.0f) * 0.8f;
-    float ch = (closeAf ? closeAf->h : 40.0f) * 0.8f;
+    float closeSc = _btnAnims[BTN_INFO_CLOSE].scale;
+    float cw = (closeAf ? closeAf->w : 40.0f) * closeSc;
+    float ch = (closeAf ? closeAf->h : 40.0f) * closeSc;
     drawAtlasFrame("GJ_closeBtn_001.png", midX - 220.0f, 172.0f, cw, ch);
 
     drawBitmapText("bigFont", "Credits", midX, 206.0f, 0.75f, 1.0f, 1.0f, 1.0f, 1.0f, true);
-    drawBitmapText("goldFont", "Made by RobTop Games", midX, 276.0f, 0.55f, 1.0f, 0.8f, 0.2f, 1.0f, true);
-    drawBitmapText("goldFont", "Song: Stereo Madness", midX, 336.0f, 0.55f, 1.0f, 0.8f, 0.2f, 1.0f, true);
-    drawBitmapText("goldFont", "by ForeverBound", midX - 25.0f, 366.0f, 0.55f, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    drawBitmapText("goldFont", "Made by RobTop Games", midX, 276.0f, 0.60f, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    drawBitmapText("goldFont", "Song: Stereo Madness", midX, 336.0f, 0.60f, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    drawBitmapText("goldFont", "by ForeverBound", midX - 20.0f, 366.0f, 0.60f, 1.0f, 0.8f, 0.2f, 1.0f, true);
 
     float textW = 145.0f;
     const BitmapFont* gf = getFont("goldFont");
@@ -1382,33 +1654,43 @@ void GameScene::_renderInfoPopup() {
         float tw = 0.0f;
         for (char ch : std::string("by ForeverBound")) {
             auto it = gf->chars.find((unsigned char)ch);
-            if (it != gf->chars.end()) tw += it->second.xAdvance * 0.55f;
+            if (it != gf->chars.end()) tw += it->second.xAdvance * 0.60f;
         }
         if (tw > 0.0f) textW = tw;
     }
 
     const AtlasFrame* ytAf = findAtlasFrame("gj_ytIcon_001.png");
-    float ytw = (ytAf ? ytAf->w : 64.0f) * 0.5f;
-    float yth = (ytAf ? ytAf->h : 44.0f) * 0.5f;
-    float textRightEdge = (midX - 25.0f) + (textW * 0.5f);
-    float ytX = textRightEdge + 10.0f + ytw * 0.5f;
-    drawAtlasFrame("gj_ytIcon_001.png", ytX, 366.0f, ytw, yth);
+    float ytSc = _btnAnims[BTN_INFO_YT].scale;
+    float ytw = (ytAf ? ytAf->w : 64.0f) * ytSc;
+    float yth = (ytAf ? ytAf->h : 44.0f) * ytSc;
+    float textRightEdge = (midX - 20.0f) + (textW * 0.5f);
+    float ytX = textRightEdge + 20.0f + 40.0f;
+    drawAtlasFrame("gj_ytIcon_001.png", ytX, 368.0f, ytw, yth);
 
-    drawGenericText("© 2026 RobTop Games. All rights reserved.", midX, 446.0f, 12.0f, 1.0f, 1.0f, 1.0f, 0.5f, 1);
-    drawGenericText("Unauthorized copying, distribution, or hosting of this demo is prohibited.", midX, 463.0f, 12.0f, 1.0f, 1.0f, 1.0f, 0.5f, 1);
+    drawGenericText("© 2026 RobTop Games. All rights reserved.", midX, 446.0f, 12.0f, 0.0f, 0.0f, 0.0f, 0.7f, 1);
+    drawGenericText("Unauthorized copying, distribution, or hosting of this demo is prohibited.", midX, 463.0f, 12.0f, 0.0f, 0.0f, 0.0f, 0.7f, 1);
 }
 
 void GameScene::_renderEndLayer() {
     float midX = screenWidth * 0.5f;
+    float dropOffsetY = 0.0f;
+    float overlayAlpha = 0.0f;
 
-    float p = 1.0f;
-    if (_endSequencePhase >= 3) {
-        p = std::clamp((_endSequenceTimer - 3.45f) / 1.0f, 0.0f, 1.0f);
+    if (_endLayerHiding) {
+        float t = std::min(_endLayerHideTimer / 0.5f, 1.0f);
+        float ease = (t < 0.5f) ? (2.0f * t * t) : (1.0f - 2.0f * (1.0f - t) * (1.0f - t));
+        dropOffsetY = -640.0f * ease;
+        overlayAlpha = (100.0f / 255.0f) * (1.0f - t);
+    } else {
+        float p = 1.0f;
+        if (_endSequencePhase >= 3) {
+            p = std::clamp((_endSequenceTimer - 3.45f) / 1.0f, 0.0f, 1.0f);
+        }
+        float bp = easeBounceOut(p);
+        dropOffsetY = (650.0f * bp - 640.0f);
+        overlayAlpha = (100.0f / 255.0f) * p;
     }
-    float bp = easeBounceOut(p);
-    float dropOffsetY = (650.0f * bp - 640.0f) - 10.0f;
 
-    float overlayAlpha = (100.0f / 255.0f) * p;
     glDisable(GL_TEXTURE_2D);
     glColor4f(0.0f, 0.0f, 0.0f, overlayAlpha);
     glBegin(GL_QUADS);
@@ -1420,76 +1702,81 @@ void GameScene::_renderEndLayer() {
     glPushMatrix();
     glTranslatef(0.0f, dropOffsetY, 0.0f);
 
-    const AtlasFrame* topAf = findAtlasFrame("GJ_table_top_001.png");
-    float topW = (topAf && topAf->w > 0.0f) ? topAf->w : 712.0f;
-    float sideOffset = (topW * 0.5f) - 31.0f;
-    float boxW = (sideOffset * 2.0f) + 12.0f;
-    float boxH = 465.0f;
-    float boxCenterY = 315.0f;
+    const float boxW = 712.0f;
+    const float boxH = 460.0f;
+    const float sideOffset = (boxW * 0.5f) - 31.0f;
 
     const AtlasFrame* chainAf = findAtlasFrame("chain_01_001.png");
     float chw = chainAf ? chainAf->w : 22.0f;
     float chh = 90.0f;
-    float chainBottomY = 28.0f;
+    float chainBottomY = 5.0f;
     drawAtlasFrame("chain_01_001.png", midX - 312.0f, chainBottomY - chh * 0.5f, chw, chh);
     drawAtlasFrame("chain_01_001.png", midX + 312.0f, chainBottomY - chh * 0.5f, chw, chh);
 
     glDisable(GL_TEXTURE_2D);
     glColor4f(0.0f, 0.0f, 0.0f, 180.0f / 255.0f);
     glBegin(GL_QUADS);
-    glVertex2f(midX - boxW * 0.5f, boxCenterY - boxH * 0.5f);
-    glVertex2f(midX + boxW * 0.5f, boxCenterY - boxH * 0.5f);
-    glVertex2f(midX + boxW * 0.5f, boxCenterY + boxH * 0.5f);
-    glVertex2f(midX - boxW * 0.5f, boxCenterY + boxH * 0.5f);
+    glVertex2f(midX - boxW * 0.5f, 310.0f - boxH * 0.5f);
+    glVertex2f(midX + boxW * 0.5f, 310.0f - boxH * 0.5f);
+    glVertex2f(midX + boxW * 0.5f, 310.0f + boxH * 0.5f);
+    glVertex2f(midX - boxW * 0.5f, 310.0f + boxH * 0.5f);
     glEnd();
     glEnable(GL_TEXTURE_2D);
 
     const AtlasFrame* sideAf = findAtlasFrame("GJ_table_side_001.png");
     float sw = sideAf ? sideAf->w : 40.0f;
-    drawAtlasFrame("GJ_table_side_001.png", midX - sideOffset, boxCenterY, sw, boxH);
-    drawAtlasFrame("GJ_table_side_001.png", midX + sideOffset, boxCenterY, sw, boxH, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, true, false);
+    drawAtlasFrame("GJ_table_side_001.png", midX - sideOffset, 310.0f, sw, boxH);
+    drawAtlasFrame("GJ_table_side_001.png", midX + sideOffset, 310.0f, sw, boxH, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, true, false);
 
-    drawAtlasFrame("GJ_table_top_001.png", midX, 75.0f, 0.0f, 0.0f);
-    drawAtlasFrame("GJ_table_bottom_001.png", midX, 555.0f, 0.0f, 0.0f);
+    drawAtlasFrame("GJ_table_top_001.png", midX, 70.0f, 0.0f, 0.0f);
+    drawAtlasFrame("GJ_table_bottom_001.png", midX, 560.0f, 0.0f, 0.0f);
 
     const AtlasFrame* titleAf = findAtlasFrame("GJ_levelComplete_001.png");
     float tlw = (titleAf ? titleAf->w : 400.0f) * 0.8f;
     float tlh = (titleAf ? titleAf->h : 80.0f) * 0.8f;
-    drawAtlasFrame("GJ_levelComplete_001.png", midX, 160.0f, tlw, tlh);
+    drawAtlasFrame("GJ_levelComplete_001.png", midX, 170.0f, tlw, tlh);
 
-    float statsScale = 0.55f;
-    drawBitmapText("goldFont", "Attempts: " + std::to_string(_attempts), midX, 245.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
-    drawBitmapText("goldFont", "Jumps: " + std::to_string(_totalJumps), midX, 290.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
-    drawBitmapText("goldFont", "Time: " + formatPlayTime(_playTime), midX, 335.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    float statsScale = 0.8f;
+    drawBitmapText("goldFont", "Attempts: " + std::to_string(_attempts), midX, 250.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    drawBitmapText("goldFont", "Jumps: " + std::to_string(_totalJumps), midX, 298.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
+    drawBitmapText("goldFont", "Time: " + formatPlayTime(_playTime), midX, 346.0f, statsScale, 1.0f, 0.8f, 0.2f, 1.0f, true);
 
-    drawBitmapText("bigFont", _completeMessage, midX + 225.0f, 335.0f, 0.65f, 1.0f, 1.0f, 1.0f, 1.0f, true);
+    drawBitmapText("bigFont", _completeMessage, midX + 225.0f, 346.0f, 0.8f, 1.0f, 1.0f, 1.0f, 1.0f, true);
 
     if (_starAwardStarted && _starAwardAlpha > 0.01f) {
         const AtlasFrame* starAf = findAtlasFrame("GJ_bigStar_001.png");
         float stw = (starAf ? starAf->w : 64.0f) * _starAwardScale;
         float sth = (starAf ? starAf->h : 64.0f) * _starAwardScale;
-        drawAtlasFrame("GJ_bigStar_001.png", midX + 225.0f, 265.0f, stw, sth, 0.0f, 1.0f, 1.0f, 1.0f, _starAwardAlpha);
+        drawAtlasFrame("GJ_bigStar_001.png", midX + 225.0f, 268.5f, stw, sth, 0.0f, 1.0f, 1.0f, 1.0f, _starAwardAlpha);
     }
 
     const AtlasFrame* getItAf = findAtlasFrame("getIt_001.png");
     float giw = (getItAf ? getItAf->w : 120.0f) / 1.5f;
     float gih = (getItAf ? getItAf->h : 60.0f) / 1.5f;
-    drawAtlasFrame("getIt_001.png", midX - 225.0f, 340.0f, giw, gih);
+    drawAtlasFrame("getIt_001.png", midX - 225.0f, 352.5f, giw, gih);
 
-    float storeScale = 1.0f / 1.5f;
-    auto drawEndStoreBtn = [&](const std::string& name, float px) {
+    auto drawEndStoreBtn = [&](const std::string& name, ButtonId id, float px) {
         const AtlasFrame* af = findAtlasFrame(name);
-        float bw = (af ? af->w : 140.0f) * storeScale;
-        float bh = (af ? af->h : 45.0f) * storeScale;
-        drawAtlasFrame(name, px, 440.0f, bw, bh);
+        float sc = _btnAnims[id].scale;
+        float bw = (af ? af->w : 140.0f) * sc;
+        float bh = (af ? af->h : 45.0f) * sc;
+        drawAtlasFrame(name, px, 437.5f, bw, bh);
     };
 
-    drawEndStoreBtn("downloadApple_001.png",  midX - 225.0f);
-    drawEndStoreBtn("downloadGoogle_001.png", midX);
-    drawEndStoreBtn("downloadSteam_001.png",  midX + 225.0f);
+    drawEndStoreBtn("downloadApple_001.png",  BTN_END_APPLE,  midX - 225.0f);
+    drawEndStoreBtn("downloadGoogle_001.png", BTN_END_GOOGLE, midX);
+    drawEndStoreBtn("downloadSteam_001.png",  BTN_END_STEAM,  midX + 225.0f);
 
-    drawAtlasFrame("GJ_replayBtn_001.png", midX - 160.0f, 545.0f, 0.0f, 0.0f);
-    drawAtlasFrame("GJ_menuBtn_001.png",   midX + 160.0f, 545.0f, 0.0f, 0.0f);
+    auto drawEndNavBtn = [&](const std::string& name, ButtonId id, float px, float py) {
+        const AtlasFrame* af = findAtlasFrame(name);
+        float sc = _btnAnims[id].scale;
+        float bw = (af ? af->w : 85.0f) * sc;
+        float bh = (af ? af->h : 85.0f) * sc;
+        drawAtlasFrame(name, px, py, bw, bh);
+    };
+
+    drawEndNavBtn("GJ_replayBtn_001.png", BTN_END_REPLAY, midX - 200.0f, 555.0f);
+    drawEndNavBtn("GJ_menuBtn_001.png",   BTN_END_MENU,   midX + 200.0f, 555.0f);
 
     glPopMatrix();
 }

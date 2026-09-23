@@ -2,6 +2,9 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
+#include <cmath>
+#include <algorithm>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include "constants.h"
@@ -34,6 +37,94 @@ struct CompleteLightRay {
     bool done = false;
 };
 
+enum ButtonId {
+    BTN_MENU_PLAY = 0,
+    BTN_MENU_FS,
+    BTN_MENU_INFO,
+    BTN_MENU_STEAM,
+    BTN_MENU_GOOGLE,
+    BTN_MENU_APPLE,
+    BTN_PAUSE_FS,
+    BTN_PAUSE_REPLAY,
+    BTN_PAUSE_PLAY,
+    BTN_PAUSE_MENU,
+    BTN_END_REPLAY,
+    BTN_END_MENU,
+    BTN_END_APPLE,
+    BTN_END_GOOGLE,
+    BTN_END_STEAM,
+    BTN_INFO_CLOSE,
+    BTN_INFO_YT,
+    BTN_COUNT
+};
+
+struct ButtonAnim {
+    float scale = 1.0f;
+    float baseScale = 1.0f;
+    float fromScale = 1.0f;
+    float targetScale = 1.0f;
+    float timer = 0.0f;
+    float duration = 0.30f;
+    bool animating = false;
+
+    void init(float base) {
+        baseScale = base;
+        scale = base;
+        fromScale = base;
+        targetScale = base;
+        animating = false;
+    }
+
+    void press(float base) {
+        baseScale = base;
+        fromScale = scale;
+        targetScale = 1.26f * baseScale;
+        timer = 0.0f;
+        duration = 0.30f;
+        animating = true;
+    }
+
+    void deselect() {
+        fromScale = scale;
+        targetScale = baseScale;
+        timer = 0.0f;
+        duration = 0.40f;
+        animating = true;
+    }
+
+    // Se resetea al soltar
+    void release() {
+        scale = baseScale;
+        targetScale = baseScale;
+        animating = false;
+    }
+
+    void update(float dt) {
+        if (animating) {
+            timer += dt;
+            float t = std::min(timer / duration, 1.0f);
+            float bounce;
+            if (t < (1.0f / 2.75f)) {
+                bounce = 7.5625f * t * t;
+            } else if (t < (2.0f / 2.75f)) {
+                float p = t - (1.5f / 2.75f);
+                bounce = 7.5625f * p * p + 0.75f;
+            } else if (t < (2.5f / 2.75f)) {
+                float p = t - (2.25f / 2.75f);
+                bounce = 7.5625f * p * p + 0.9375f;
+            } else {
+                float p = t - (2.625f / 2.75f);
+                bounce = 7.5625f * p * p + 0.984375f;
+            }
+            scale = fromScale + (targetScale - fromScale) * bounce;
+            if (t >= 1.0f) {
+                scale = targetScale;
+                animating = false;
+            }
+        }
+    }
+};
+
 class GameScene {
 public:
     GameScene();
@@ -63,6 +154,8 @@ private:
     void _triggerEndPortal();
     void _levelComplete();
     void _showNewBest();
+    void _renderNewBest();
+    void _hideEndLayer(std::function<void()> onComplete);
 
     void _startCompleteLightRays();
     void _updateCompleteLightRays(float dt);
@@ -145,8 +238,21 @@ private:
     bool _newBestShown = false;
     bool _hadNewBest = false;
 
+    bool _newBestActive = false;
+    float _newBestTimer = 0.0f;
+    float _newBestScale = 0.01f;
+
+    bool _endLayerHiding = false;
+    float _endLayerHideTimer = 0.0f;
+    std::function<void()> _endLayerHideCallback;
+
+    ButtonAnim _btnAnims[BTN_COUNT];
+    ButtonId _heldBtn = BTN_COUNT;
+    bool _isButtonPressed = false;
+
     float _menuPlayBtnY = 320.0f;
     float _menuPlayTimer = 0.0f;
+    float _menuGlitterTimer = 0.0f;
     std::vector<MenuGlitter> _menuParticles;
 
     float _endPortalGameY = 240.0f;

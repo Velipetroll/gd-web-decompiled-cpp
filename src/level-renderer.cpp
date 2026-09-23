@@ -4,7 +4,6 @@
 #include <iostream>
 #include <cmath>
 
-// (Reemplaza únicamente la función getPortalOffset al inicio de level-renderer.cpp)
 static void getPortalOffset(const std::string& frameName, float& outDx, float& outDy) {
     outDx = 0.0f;
     outDy = 0.0f;
@@ -223,7 +222,7 @@ void LevelRenderer::_updateEndPortalVortex(float dt) {
     );
 }
 
-void LevelRenderer::updateGroundTiles(float cameraX, float cameraY) {
+void LevelRenderer::updateGroundTiles(float cameraX, float cameraY, float dt) {
     _lastCameraY = cameraY;
 
     for (size_t i = 0; i < _groundWorldX.size(); ++i) {
@@ -233,7 +232,7 @@ void LevelRenderer::updateGroundTiles(float cameraX, float cameraY) {
         }
     }
 
-    _updateEndPortalVortex(1.0f / 60.0f);
+    _updateEndPortalVortex(dt);
 }
 
 void LevelRenderer::_addToSection(const VisualSprite& sprite) {
@@ -649,24 +648,24 @@ void LevelRenderer::applyEnterEffects(float cameraX) {
             float targetScale = 1.0f;
 
             switch (effect) {
-                case 0: // Fade
+                case 0:
                     break;
-                case 1: // Slide up
+                case 1:
                     targetY = s.baseY + maxDist * invFactor;
                     break;
-                case 2: // Slide down
+                case 2:
                     targetY = s.baseY - maxDist * invFactor;
                     break;
-                case 3: // Slide from left
+                case 3:
                     targetX = s.baseX - maxDist * invFactor;
                     break;
-                case 4: // Slide from right
+                case 4:
                     targetX = s.baseX + maxDist * invFactor;
                     break;
-                case 5: // Scale down
+                case 5:
                     if (!s.audioScale) targetScale = factor;
                     break;
-                case 6: // Zoom
+                case 6:
                     if (!s.audioScale) targetScale = 1.0f + 0.75f * invFactor;
                     break;
                 default:
@@ -817,6 +816,53 @@ struct InLevelPortalEmitter {
 static std::vector<InLevelPortalEmitter> _inLevelPortalEmitters;
 static bool _inLevelPortalsIndexed = false;
 
+void LevelRenderer::updatePortals(float dt, float cameraX) {
+    if (!_inLevelPortalsIndexed) {
+        _inLevelPortalEmitters.clear();
+        for (const auto& obj : objects) {
+            if (obj.type == portalFly || obj.type == portalCube) {
+                InLevelPortalEmitter pe;
+                pe.x = obj.x - 10.0f;
+                pe.y = flipY(obj.y);
+                pe.color = (obj.type == portalFly) ? 16711935 : 5111552;
+                pe.timer = 0.0f;
+                _inLevelPortalEmitters.push_back(pe);
+            }
+        }
+        _inLevelPortalsIndexed = true;
+    }
+
+    for (auto& pe : _inLevelPortalEmitters) {
+        if (pe.x >= cameraX - 100.0f && pe.x <= cameraX + (float)screenWidth + 100.0f) {
+            pe.timer += dt;
+            while (pe.timer >= 0.02f) {
+                pe.timer -= 0.02f;
+                if (pe.particles.size() < 30) {
+                    InLevelPortalParticle pp;
+                    float angle = ((85.0f + 190.0f * ((rand() % 1000) / 1000.0f)) * 3.14159265f) / 180.0f;
+                    float dist = 40.0f + 80.0f * ((rand() % 1000) / 1000.0f);
+                    pp.rx = std::cos(angle) * dist;
+                    pp.ry = std::sin(angle) * dist;
+                    pp.maxLife = (200.0f + (rand() % 801)) / 1000.0f;
+                    pp.life = 0.0f;
+                    pe.particles.push_back(pp);
+                }
+            }
+
+            for (auto& pp : pe.particles) {
+                pp.life += dt;
+            }
+
+            pe.particles.erase(
+                std::remove_if(pe.particles.begin(), pe.particles.end(), [](const InLevelPortalParticle& pp) {
+                    return pp.life >= pp.maxLife;
+                }),
+                pe.particles.end()
+            );
+        }
+    }
+}
+
 void LevelRenderer::renderLayer2(float cameraX, float cameraY) {
     glPushMatrix();
     glTranslatef(-cameraX, cameraY, 0.0f);
@@ -842,46 +888,15 @@ void LevelRenderer::renderLayer2(float cameraX, float cameraY) {
         }
     }
 
-    if (!_inLevelPortalsIndexed) {
-        _inLevelPortalEmitters.clear();
-        for (const auto& obj : objects) {
-            if (obj.type == portalFly || obj.type == portalCube) {
-                InLevelPortalEmitter pe;
-                pe.x = obj.x - 10.0f;
-                pe.y = flipY(obj.y);
-                pe.color = (obj.type == portalFly) ? 16711935 : 5111552;
-                pe.timer = 0.0f;
-                _inLevelPortalEmitters.push_back(pe);
-            }
-        }
-        _inLevelPortalsIndexed = true;
-    }
-
     applyBlendMode(BLEND_ADD);
-    for (auto& pe : _inLevelPortalEmitters) {
+    for (const auto& pe : _inLevelPortalEmitters) {
         if (pe.x >= cameraX - 100.0f && pe.x <= cameraX + (float)screenWidth + 100.0f) {
-            pe.timer += (1.0f / 60.0f);
-            while (pe.timer >= 0.02f) {
-                pe.timer -= 0.02f;
-                if (pe.particles.size() < 30) {
-                    InLevelPortalParticle pp;
-                    float angle = ((85.0f + 190.0f * ((rand() % 1000) / 1000.0f)) * 3.14159265f) / 180.0f;
-                    float dist = 40.0f + 80.0f * ((rand() % 1000) / 1000.0f);
-                    pp.rx = std::cos(angle) * dist;
-                    pp.ry = std::sin(angle) * dist;
-                    pp.maxLife = (200.0f + (rand() % 801)) / 1000.0f;
-                    pp.life = 0.0f;
-                    pe.particles.push_back(pp);
-                }
-            }
-
             float r = ((pe.color >> 16) & 0xFF) / 255.0f;
             float g = ((pe.color >> 8)  & 0xFF) / 255.0f;
             float b =  (pe.color        & 0xFF) / 255.0f;
 
-            for (auto& pp : pe.particles) {
-                pp.life += (1.0f / 60.0f);
-                float pt = pp.life / pp.maxLife;
+            for (const auto& pp : pe.particles) {
+                float pt = std::min(pp.life / pp.maxLife, 1.0f);
                 float curDist = 1.0f - pt;
                 float px = pe.x + pp.rx * curDist;
                 float py = pe.y + pp.ry * curDist;
@@ -890,13 +905,6 @@ void LevelRenderer::renderLayer2(float cameraX, float cameraY) {
 
                 drawAtlasFrame("square.png", px, py, 20.0f * sc, 20.0f * sc, 0.0f, r, g, b, alpha);
             }
-
-            pe.particles.erase(
-                std::remove_if(pe.particles.begin(), pe.particles.end(), [](const InLevelPortalParticle& pp) {
-                    return pp.life >= pp.maxLife;
-                }),
-                pe.particles.end()
-            );
         }
     }
     applyBlendMode(BLEND_NORMAL);

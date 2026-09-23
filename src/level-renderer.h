@@ -54,7 +54,9 @@ public:
     void resetVisibility();
     void resetGroundState();
 
-    void updateGroundTiles(float cameraX, float cameraY = 0.0f);
+    void updateGroundTiles(float cameraX, float cameraY, float dt);
+    void updatePortals(float dt, float cameraX);
+
     void stepGroundAnimation(float dt);
     void updateVisibility(float cameraX);
     void applyEnterEffects(float cameraX);

@@ -357,30 +357,153 @@ void Player::_createExplosionPieces(float x, float y) {
     _deathParticles.clear();
     _pieceTrails.clear();
 
-    const AtlasFrame* frame = findAtlasFrame("player_01_001.png");
-    float u0 = frame ? frame->u0 : 0.0f, v0 = frame ? frame->v0 : 0.0f;
-    float u1 = frame ? frame->u1 : 1.0f, v1 = frame ? frame->v1 : 1.0f;
+    struct ActiveLayer {
+        const AtlasFrame* af;
+        float offsetX, offsetY;
+        float r, g, b;
+    };
+    std::vector<ActiveLayer> activeLayers;
+
+    auto collectLayer = [&](const LayeredSprite& ls) {
+        if (!ls.visible || ls.frameName.empty()) return;
+        const AtlasFrame* af = findAtlasFrame(ls.frameName);
+        if (!af || af->w <= 0.0f || af->h <= 0.0f) return;
+        activeLayers.push_back({af, ls.offsetX, ls.offsetY, ls.r, ls.g, ls.b});
+    };
+
+    if (p.isFlying) {
+        collectLayer(_shipOverlayLayer);
+        collectLayer(_shipSpriteLayer);
+        collectLayer(_shipExtraLayer);
+        collectLayer(_playerOverlayLayer);
+        collectLayer(_playerSpriteLayer);
+        collectLayer(_playerExtraLayer);
+    } else {
+        collectLayer(_playerOverlayLayer); // Fondo cian (ojos/boca)
+        collectLayer(_playerSpriteLayer);  // Cuerpo verde principal
+        collectLayer(_playerExtraLayer);   // Detalles blancos (pupilas, dientes)
+    }
+
+    const float extra = 0.9f;
+    const float value72 = 40.0f * extra;
+    const int totalSize = (int)std::round(2.0f * value72); // 72 px
+
+    int cols = 2 + (int)std::round(2.0f * ((float)rand() / (float)RAND_MAX));
+    int rows = 2 + (int)std::round(2.0f * ((float)rand() / (float)RAND_MAX));
+    float rVal = (float)rand() / (float)RAND_MAX;
+    if (rVal > 0.95f) cols = 1;
+    else if (rVal > 0.90f) rows = 1;
+
+    const float value80 = 9.34740324f * 0.8f;
+    const float value81 = 0.5f * value80;
+    const float value82 = 1.0f * value80;
+    const float num32 = 0.45f;
+    const float avgW = (float)totalSize / (float)cols;
+    const float avgH = (float)totalSize / (float)rows;
+
+    std::vector<int> colWidths;
+    std::vector<int> colOffsets = {0};
+    int sumW = 0;
+    for (int i = 0; i < cols - 1; ++i) {
+        float rFrac = (float)rand() / (float)RAND_MAX;
+        int w = (int)std::round(avgW * (0.55f + rFrac * num32 * 2.0f));
+        colWidths.push_back(w);
+        sumW += w;
+        colOffsets.push_back(sumW);
+    }
+    colWidths.push_back(totalSize - sumW);
+
+    std::vector<int> rowHeights;
+    std::vector<int> rowOffsets = {0};
+    int sumH = 0;
+    for (int i = 0; i < rows - 1; ++i) {
+        float rFrac = (float)rand() / (float)RAND_MAX;
+        int h = (int)std::round(avgH * (0.55f + rFrac * num32 * 2.0f));
+        rowHeights.push_back(h);
+        sumH += h;
+        rowOffsets.push_back(sumH);
+    }
+    rowHeights.push_back(totalSize - sumH);
 
     int pieceIndex = 0;
-    for (int r = 0; r < 3; ++r) {
-        for (int c = 0; c < 3; ++c) {
-            ExplosionPiece piece;
-            piece.x = x + (c - 1) * 16.0f;
-            piece.y = y + (r - 1) * 16.0f;
-            piece.w = 16.0f;
-            piece.h = 16.0f;
-            piece.u0 = u0 + (u1 - u0) * (c / 3.0f);
-            piece.v0 = v0 + (v1 - v0) * (r / 3.0f);
-            piece.u1 = u0 + (u1 - u0) * ((c + 1) / 3.0f);
-            piece.v1 = v0 + (v1 - v0) * ((r + 1) / 3.0f);
+    for (int i = 0; i < cols; ++i) {
+        int i2 = colWidths[i];
+        int i3 = colOffsets[i];
 
-            piece.xVel = ((rand() % 100) / 50.0f - 1.0f) * 6.0f;
-            piece.yVel = -(6.0f + (rand() % 100) / 15.0f);
-            piece.rotDelta = ((rand() % 100) / 50.0f - 1.0f) * 360.0f;
+        for (int i4 = 0; i4 < rows; ++i4) {
+            int value85 = rowHeights[i4];
+            int value86 = rowOffsets[i4];
+            if (i2 <= 0 || value85 <= 0) continue;
+
+            pieceIndex++;
+            ExplosionPiece piece;
+            piece.w = (float)i2;
+            piece.h = (float)value85;
+
+            float shardX0 = (float)i3 - totalSize * 0.5f;
+            float shardX1 = (float)(i3 + i2) - totalSize * 0.5f;
+            float shardY0 = (float)value86 - totalSize * 0.5f;
+            float shardY1 = (float)(value86 + value85) - totalSize * 0.5f;
+
+            float shardCX = (shardX0 + shardX1) * 0.5f;
+            float shardCY = (shardY0 + shardY1) * 0.5f;
+
+            piece.x = x + shardCX;
+            piece.y = y + shardCY;
+
+            for (const auto& layer : activeLayers) {
+                float layerW = layer.af->w;
+                float layerH = layer.af->h;
+                float layerX0 = layer.offsetX - layerW * 0.5f;
+                float layerX1 = layer.offsetX + layerW * 0.5f;
+                float layerY0 = layer.offsetY - layerH * 0.5f;
+                float layerY1 = layer.offsetY + layerH * 0.5f;
+
+                float ix0 = std::max(shardX0, layerX0);
+                float ix1 = std::min(shardX1, layerX1);
+                float iy0 = std::max(shardY0, layerY0);
+                float iy1 = std::min(shardY1, layerY1);
+
+                if (ix1 > ix0 && iy1 > iy0) {
+                    ShardQuad q;
+                    q.vx0 = ix0 - shardCX;
+                    q.vx1 = ix1 - shardCX;
+                    q.vy0 = iy0 - shardCY;
+                    q.vy1 = iy1 - shardCY;
+
+                    float uFrac0 = (ix0 - layerX0) / layerW;
+                    float uFrac1 = (ix1 - layerX0) / layerW;
+                    float vFrac0 = (iy0 - layerY0) / layerH;
+                    float vFrac1 = (iy1 - layerY0) / layerH;
+
+                    float uSpan = layer.af->u1 - layer.af->u0;
+                    float vSpan = layer.af->v1 - layer.af->v0;
+                    q.u0 = layer.af->u0 + uSpan * uFrac0;
+                    q.u1 = layer.af->u0 + uSpan * uFrac1;
+                    q.v0 = layer.af->v0 + vSpan * vFrac0;
+                    q.v1 = layer.af->v0 + vSpan * vFrac1;
+
+                    q.r = layer.r;
+                    q.g = layer.g;
+                    q.b = layer.b;
+
+                    piece.quads.push_back(q);
+                }
+            }
+
+            float rX = 2.0f * ((float)rand() / (float)RAND_MAX) - 1.0f;
+            float rY = 2.0f * ((float)rand() / (float)RAND_MAX) - 1.0f;
+            float rRot = 2.0f * ((float)rand() / (float)RAND_MAX) - 1.0f;
+
+            piece.xVel = value81 + rX * value82;
+            piece.yVel = -(12.0f + 6.0f * rY);
+            piece.timer = 1.4f;
+            piece.fadeTime = 0.5f;
+            piece.rotDelta = (360.0f * rRot) / 60.0f;
+            piece.halfSize = (float)std::min(i2, value85) * 0.5f;
 
             piece.hasTrail = (pieceIndex % 2 == 0);
             piece.trailTimer = 0.0f;
-            pieceIndex++;
 
             _explosionPieces.push_back(piece);
         }
@@ -396,6 +519,8 @@ void Player::_createExplosionPieces(float x, float y) {
         dp.vx = std::cos(angle) * speed;
         dp.vy = std::sin(angle) * speed;
 
+        dp.startScale = 18.0f / 32.0f;
+        dp.endScale = 0.0f;
         dp.maxLife = (50.0f + (rand() % 751)) / 1000.0f;
         dp.life = 0.0f;
         _deathParticles.push_back(dp);
@@ -412,30 +537,43 @@ void Player::_updateExplosion(float dt) {
     _shockwaveRadius = 18.0f + 144.0f * easeOut;
     _shockwaveAlpha = 1.0f - t;
 
-    float groundScreenY = flipY(0) + _deathCameraY;
+    const float factor = std::min(60.0f * dt * 0.9f, 2.0f);
+    const float gravity = factor;
+    const float groundScreenY = flipY(0) + _deathCameraY;
+
     for (auto& piece : _explosionPieces) {
         piece.timer -= dt;
-        piece.yVel += 25.0f * dt;
-        piece.x += piece.xVel;
-        piece.y += piece.yVel;
-        piece.angle += piece.rotDelta * dt;
+        if (piece.timer > 0.0f) {
+            piece.yVel += gravity;
+            piece.xVel *= (0.98f + 0.02f * (1.0f - factor));
 
-        if (piece.y > groundScreenY - piece.halfSize) {
-            piece.y = groundScreenY - piece.halfSize;
-            piece.yVel *= -0.8f;
-        }
+            piece.x += piece.xVel * factor;
+            piece.y += piece.yVel * factor;
 
-        if (piece.hasTrail && piece.timer > 0.0f) {
-            piece.trailTimer += dt;
-            while (piece.trailTimer >= 0.025f) {
-                piece.trailTimer -= 0.025f;
-                PieceTrailParticle tp;
-                tp.x = piece.x + 3.0f * (((rand() % 1000) / 500.0f) - 1.0f);
-                tp.y = piece.y + 3.0f * (((rand() % 1000) / 500.0f) - 1.0f);
-                tp.maxLife = (200.0f + (rand() % 201)) / 1000.0f;
-                tp.life = 0.0f;
-                tp.scale = 0.5f;
-                _pieceTrails.push_back(tp);
+            const float groundLimit = groundScreenY - piece.halfSize;
+            if (piece.y > groundLimit && piece.yVel > 0.0f) {
+                piece.y = groundLimit;
+                piece.yVel *= -0.8f;
+                // Impulso mínimo original para que no se quede pegado al suelo
+                if (std::abs(piece.yVel) < 3.0f) {
+                    piece.yVel = -3.0f;
+                }
+            }
+
+            piece.angle += piece.rotDelta * factor;
+
+            if (piece.hasTrail) {
+                piece.trailTimer += dt;
+                while (piece.trailTimer >= 0.025f) {
+                    piece.trailTimer -= 0.025f;
+                    PieceTrailParticle tp;
+                    tp.x = piece.x + 3.0f * (((rand() % 1000) / 500.0f) - 1.0f) * 2.0f;
+                    tp.y = piece.y + 3.0f * (((rand() % 1000) / 500.0f) - 1.0f) * 2.0f;
+                    tp.maxLife = (200.0f + (rand() % 201)) / 1000.0f;
+                    tp.life = 0.0f;
+                    tp.scale = 0.5f;
+                    _pieceTrails.push_back(tp);
+                }
             }
         }
     }
@@ -921,22 +1059,25 @@ void Player::render(float cameraX, float cameraY) {
 
         GLuint atlas = BootScene::textures["GJ_WebSheet"].id;
         glBindTexture(GL_TEXTURE_2D, atlas);
-        glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
 
         for (const auto& piece : _explosionPieces) {
             float pAlpha = (piece.timer < piece.fadeTime) ? (piece.timer / piece.fadeTime) : 1.0f;
-            glColor4f(0.0f, 1.0f, 0.0f, pAlpha);
 
             glPushMatrix();
             glTranslatef(piece.x, piece.y, 0.0f);
             glRotatef(piece.angle, 0.0f, 0.0f, 1.0f);
-            float hw = piece.w * 0.5f, hh = piece.h * 0.5f;
-            glBegin(GL_QUADS);
-            glTexCoord2f(piece.u0, piece.v0); glVertex2f(-hw, -hh);
-            glTexCoord2f(piece.u1, piece.v0); glVertex2f( hw, -hh);
-            glTexCoord2f(piece.u1, piece.v1); glVertex2f( hw,  hh);
-            glTexCoord2f(piece.u0, piece.v1); glVertex2f(-hw,  hh);
-            glEnd();
+
+            for (const auto& q : piece.quads) {
+                glColor4f(q.r, q.g, q.b, pAlpha);
+
+                glBegin(GL_QUADS);
+                glTexCoord2f(q.u0, q.v0); glVertex2f(q.vx0, q.vy0);
+                glTexCoord2f(q.u1, q.v0); glVertex2f(q.vx1, q.vy0);
+                glTexCoord2f(q.u1, q.v1); glVertex2f(q.vx1, q.vy1);
+                glTexCoord2f(q.u0, q.v1); glVertex2f(q.vx0, q.vy1);
+                glEnd();
+            }
+
             glPopMatrix();
         }
         return;

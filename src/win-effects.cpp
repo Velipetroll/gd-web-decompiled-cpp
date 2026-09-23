@@ -42,7 +42,7 @@ void WinEffects::spawnFinishParticles(unsigned int color1, unsigned int color2, 
         p.vy = std::sin(angle) * speed;
         p.startScale = 0.4f;
         p.endScale = 0.13f;
-        p.maxLife = (rand() % 501) / 1000.0f;
+        p.maxLife = (100.0f + (rand() % 401)) / 1000.0f;
         p.life = 0.0f;
         p.delay = delayMs / 1000.0f;
         p.color = color1;
@@ -151,7 +151,7 @@ void WinEffects::render() {
     for (const auto& p : particles) {
         if (p.delay > 0.0f || p.done) continue;
 
-        float t = std::min(p.life / p.maxLife, 1.0f);
+        float t = (p.maxLife > 0.0f) ? std::min(p.life / p.maxLife, 1.0f) : 1.0f;
         float scale = p.startScale + (p.endScale - p.startScale) * t;
         float alpha = 1.0f - t;
 

@@ -149,11 +149,10 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Set window and taskbar icon (supports both .ico and .png)
     setWindowIcon(window);
 
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    SDL_GL_SetSwapInterval(1);
+    SDL_GL_SetSwapInterval(0);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -208,7 +207,6 @@ int main(int argc, char* argv[]) {
         glLoadIdentity();
 
         gameScene->render();
-        WinEffects::render();
 
         SDL_GL_SwapWindow(window);
     }
