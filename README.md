@@ -1,9 +1,8 @@
 # Geometry Dash Web — Decompilation & Native C++ Port
 
 <p align="center">
-  <img src="./assets/banner.png" alt="Geometry Dash Banner" width="100%">
+  <img src="./assets/banner.png" alt="Geometry Dash Web C++ Port" width="100%">
 </p>
-
 
 > # ⚠️ **Warning:** This project uses AI.
 > Some people may not like AI at all for any purpose. If so, just ignore this project. Do not hate on it. I personally believe using AI for both decompilation and porting the entire engine to C++ is a completely valid use case, as doing either of these entirely by hand would take forever.
@@ -37,25 +36,38 @@ Rather than relying on heavy modern engines (like Unity, Godot) or browser runti
 
 ---
 
-## 🛠️ Building & Running (Linux / Arch Linux)
+## 🛠️ Building & Running (Linux & Windows)
 
 ### Prerequisites
-Make sure you have GCC, Make, SDL2, Mesa (OpenGL), and zlib installed:
+Make sure you have GCC, Make, SDL2, OpenGL, and zlib installed.
 
+#### Linux (Arch Linux / Debian-based)
 ```bash
 # Arch Linux
 sudo pacman -S base-devel sdl2 mesa zlib
+
+# Ubuntu / Debian
+sudo apt install build-essential libsdl2-dev libgl1-mesa-dev zlib1g-dev
 ```
 
+#### Windows (MSYS2 / MinGW64)
+You can compile natively on Windows using [MSYS2](https://www.msys2.org/) (MinGW 64-bit environment):
+```bash
+pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib
+```
+
+---
+
 ### Compile & Launch
-The project uses a Makefile with automatic header dependency tracking (`-MMD -MP`):
+The project uses the **exact same commands across both Linux and Windows** via the Makefile with automatic header dependency tracking (`-MMD -MP`):
 
 ```bash
-# Compile using all CPU cores
+# Compile using all CPU cores (Linux / Windows MSYS2)
 make -j$(nproc)
 
 # Run the game
-./GeometryDash
+./GeometryDash       # On Linux
+./GeometryDash.exe   # On Windows
 ```
 
 ---
@@ -64,6 +76,7 @@ make -j$(nproc)
 
 ```text
 ├── assets/                       # Spritesheets, audio, bitmap fonts, and level files
+│   ├── banner.png                # Project banner
 │   ├── GJ_WebSheet.png
 │   ├── GJ_WebSheet.json
 │   ├── 1.txt                     # Stereo Madness level data
