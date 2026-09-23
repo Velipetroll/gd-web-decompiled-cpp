@@ -1,6 +1,4 @@
-# ==============================================================================
-# Auto-detección del Sistema Operativo
-# ==============================================================================
+
 ifeq ($(OS),Windows_NT)
     DETECTED_OS := Windows
 else
@@ -14,9 +12,6 @@ else
     endif
 endif
 
-# ==============================================================================
-# Configuración por Sistema Operativo
-# ==============================================================================
 SRC_DIR = src
 BUILD_DIR = build
 OBJ_DIR = $(BUILD_DIR)/obj
@@ -65,17 +60,12 @@ CXXFLAGS += $(SDL_CFLAGS)
 
 all: print_os $(TARGET) copy_assets
 
-print_os:
-	@echo "==> Compilando para: $(DETECTED_OS)"
-
-# Enlaza los objetos .o (y el .res/.o del icono en Windows si existe)
 $(TARGET): $(OBJS) $(RC_OBJ) | $(BUILD_DIR)
 	$(CXX) $(OBJS) $(RC_OBJ) -o $(TARGET) $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Regla para compilar el archivo de recursos .rc en Windows
 $(OBJ_DIR)/resource.o: $(RC_SRC) | $(OBJ_DIR)
 	$(WINDRES) $< -O coff -o $@
 
