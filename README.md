@@ -13,7 +13,7 @@
 
 This repository contains two major milestones:
 1. **The clean, reverse-engineered deobfuscation** of the official Geometry Dash web demo found on [geometrydash.com](https://geometrydash.com) (originally built on Phaser 3.90.0).
-2. **A 100% standalone, lightweight native C++ port** built from scratch with a custom multi-backend rendering architecture (**OpenGL 1.1**, **DirectX 8**, and **DirectX 9**) over **SDL2**, engineered to replicate the exact look, feel, and mechanics of the original release **1:1**, while running at hundreds of frames per second on ancient low-end hardware (such as legacy netbooks, school laptops, and Intel Atom / GMA graphics).
+2. **A 100% standalone, lightweight native C++ port** built from scratch with a custom multi-backend rendering architecture (**OpenGL 1.1**, **DirectX 8**, and **DirectX 9**) over **SDL2**, engineered to replicate the exact look, feel, and mechanics of the original release **1:1**, while maximizing framerate and minimizing latency on ancient low-end hardware (such as legacy netbooks, school laptops, and Intel Atom / GMA graphics).
 
 ---
 
@@ -37,8 +37,8 @@ A lightweight 1:1 C++ port replacing browser runtimes with a custom hardware abs
 
 The in-game user interface adapts dynamically depending on the operating system and binary architecture:
 
-* **Main Menu UI:** Dedicated **Settings** button in the top-right corner; **Info / Credits** button moved directly below it.
-* **Streamlined Pause Menu:** FPS limiters moved into Settings, keeping the in-game pause screen focused on audio volume and navigation.
+* **Main Menu UI:** Dedicated **Settings** button in the top-right corner; **Info / Credits** button located directly below it.
+* **Configurable FPS Limiter:** Integrated in-game framerate limiter available in the Settings menu.
 * **Conditional In-Game Renderer Selector:**
   * **Linux:** Hidden automatically (defaults exclusively to native OpenGL 1.1).
   * **Windows 64-bit:** Exposes **DirectX 9** and **OpenGL 1.1** (hides DirectX 8, which is unavailable in 64-bit Windows).
