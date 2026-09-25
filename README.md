@@ -24,10 +24,7 @@ A lightweight 1:1 C++ port replacing browser runtimes with a custom hardware abs
 ### Key Features
 * **Multi-Backend Rendering:** Native **DirectX 8** (32-bit Intel Atom/GMA FastPath), **DirectX 9** (64-bit Windows), and **OpenGL 1.1** (Linux & fallback).
 * **Intel Atom / GMA Optimization:** Pre-transformed 2D vertices (`D3DFVF_XYZRHW`) and dynamic buffers (`D3DLOCK_DISCARD`) bypass GPU vertex-processing bottlenecks on vintage Intel GMA 950/3150 hardware.
-* **Microsecond Frame Pacing & V-Sync:** 3-tier pacing loop locking exactly 60.0 FPS without CPU spinlock overhead; true hardware V-Sync via `D3DSWAPEFFECT_COPY_VSYNC` and `D3DPRESENT_INTERVAL_ONE`.
-* **Dynamic Resolution & Maximize:** Real-time backbuffer resizing via `Reset(&d3dpp)` preventing image clipping when maximizing or resizing the window.
 * **100% Static Standalone Binary:** Linked with `-static -static-libgcc -static-libstdc++`; zero external DLL dependencies in `build/`.
-* **1:1 Physics (240 Hz Sub-stepping):** Exact jump arcs, rotation, and ship physics sliced into RobTop-accurate 240 Hz steps.
 * **Automated Asset Sync:** Scans `assets/` via C++17 `std::filesystem` to index textures (`.png`) and parse BMFont files (`.fnt`).
 * **Native Audio & Level Decompression:** Replaces Pako.js with system `zlib`; background music streaming and zero-latency SFX powered by `miniaudio` and `stb_vorbis`.
 
