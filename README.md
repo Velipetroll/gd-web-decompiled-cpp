@@ -40,8 +40,7 @@ The in-game user interface adapts dynamically depending on the operating system 
   * **Linux:** Hidden automatically (defaults exclusively to native OpenGL 1.1).
   * **Windows 64-bit:** Exposes **DirectX 9** and **OpenGL 1.1** (hides DirectX 8, which is unavailable in 64-bit Windows).
   * **Windows 32-bit:** Exposes **DirectX 8**, **DirectX 9**, and **OpenGL 1.1** (full manual control for vintage netbooks).
-* **Visual Polish:** Transparent selector backgrounds, silenced navigation arrow clicks, seamless repeating texture fill for slider bars, and responsive pause button behavior.
-
+*
 ---
 
 ## 🛠️ Building & Running (Linux & Windows)
